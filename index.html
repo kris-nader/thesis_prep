@@ -1,0 +1,1315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Interactive explorer for HSA, Bliss, Loewe and ZIP drug-combination synergy scores.">
+<title>Synergy Model Sandbox</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,500..800&family=JetBrains+Mono:wght@400;500;600&family=Public+Sans:wght@400;500;600;700&display=swap">
+<style>
+body{ margin:0; }
+[hidden]{ display:none !important; }
+img{ max-width:100%; }
+/* Layout: lab-notebook tool. Title beside a formula card, numbered tabs in teaching order,
+   then a controls rail beside live charts and dose grids; everything stacks under 860px.
+   Light by default; the page's own Light/Dark toggle sets data-sbx on <html>. */
+:root{
+  --bg:#f4f5f7; --surface:#ffffff; --surface-2:#eef0f3;
+  --ink:#11161c; --ink-2:#454d58; --muted:#646b75;
+  --line:#dadee4; --grid:#e8eaee; --axis:#bfc5cd;
+  --drug-a:#6250d6; --drug-b:#1baf7a;
+  --syn:#e34948; --ant:#2a78d6; --mid:#eceef1;
+  --font-display:"Archivo","Arial Narrow",system-ui,sans-serif;
+  --font-body:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-data:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+:root[data-sbx="dark"]{
+  --bg:#1c1f24; --surface:#24282e; --surface-2:#2c3138;
+  --ink:#f0f2f5; --ink-2:#c8cdd5; --muted:#a0a7b1;
+  --line:#3a4048; --grid:#30353c; --axis:#4b525c;
+  --drug-a:#9085e9; --drug-b:#199e70;
+  --syn:#e66767; --ant:#3987e5; --mid:#363b43;
+  color-scheme:dark;
+}
+html{ -webkit-text-size-adjust:100%; }
+body{ background:var(--bg); color:var(--ink); font-family:var(--font-body); font-size:15px; line-height:1.5; }
+.wrap{ max-width:1160px; margin:0 auto; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); padding-block:24px 64px; }
+.vh{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+.muted{ color:var(--muted); }
+.note{ font-size:12.5px; color:var(--muted); margin:10px 0 0; }
+:focus-visible{ outline:2px solid var(--drug-a); outline-offset:2px; }
+
+/* Header */
+.topbar{ display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+.themer{ display:inline-flex; border:1px solid var(--line); border-radius:999px; padding:3px; gap:2px; background:var(--surface); }
+.themer button{ appearance:none; border:0; background:none; color:var(--ink-2); font:600 12.5px var(--font-body); padding:5px 12px; border-radius:999px; cursor:pointer; }
+.themer button[aria-pressed="true"]{ background:var(--ink); color:var(--bg); }
+.top{ display:grid; grid-template-columns:minmax(0, 1fr) auto; gap:24px; align-items:end; margin-top:14px; }
+@media (max-width:900px){ .top{ grid-template-columns:minmax(0, 1fr); } }
+.eyebrow{ font:600 11.5px/1 var(--font-data); letter-spacing:.09em; text-transform:uppercase; color:var(--muted); margin:0; }
+h1{ font-family:var(--font-display); font-weight:780; font-stretch:80%; font-variation-settings:"wdth" 80; font-size:clamp(2.1rem, 6.2vw, 3.3rem); line-height:1; letter-spacing:-.018em; margin:0 0 .3em; text-wrap:balance; }
+.lede{ max-width:60ch; margin:0; color:var(--ink-2); }
+.formula{ background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:14px 16px; font:12.5px/1.75 var(--font-data); min-width:0; overflow-x:auto; }
+.formula .lead{ font-weight:600; }
+.formula .k{ display:inline-block; min-width:7ch; color:var(--muted); }
+.formula small{ display:block; margin-top:6px; font:12px/1.4 var(--font-body); color:var(--muted); }
+
+/* Tabs */
+.tabs{ display:flex; gap:2px; margin:26px 0 22px; border-bottom:1px solid var(--line); overflow-x:auto; }
+.tab{ appearance:none; background:none; border:0; border-bottom:2px solid transparent; margin-bottom:-1px; padding:10px 12px; font:600 14px var(--font-body); color:var(--muted); cursor:pointer; display:flex; align-items:center; gap:8px; white-space:nowrap; }
+.tab .n{ font:600 11px/1 var(--font-data); border:1px solid currentColor; border-radius:999px; width:20px; height:20px; display:inline-grid; place-items:center; }
+.tab:hover{ color:var(--ink); }
+.tab[aria-selected="true"]{ color:var(--ink); border-bottom-color:var(--ink); }
+
+/* Panels */
+.phead{ display:grid; gap:4px; margin-bottom:16px; }
+.phead h2{ font-family:var(--font-display); font-stretch:88%; font-variation-settings:"wdth" 88; font-weight:700; font-size:1.45rem; line-height:1.15; margin:0; text-wrap:balance; }
+.phead p{ margin:0; color:var(--ink-2); max-width:72ch; }
+h3{ font:600 13.5px/1.3 var(--font-body); margin:0; }
+.card{ background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:16px; min-width:0; }
+.split{ display:grid; grid-template-columns:minmax(260px, 330px) minmax(0, 1fr); gap:16px; align-items:start; }
+@media (max-width:860px){ .split{ grid-template-columns:minmax(0, 1fr); } }
+.stage{ display:grid; gap:16px; min-width:0; }
+.tw{ overflow-x:auto; }
+
+/* Presets & buttons */
+.presets{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:16px; }
+.presets .lab{ font:600 11px var(--font-data); letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin-right:4px; }
+.chip, .btn{ border:1px solid var(--line); background:var(--surface); color:var(--ink); border-radius:999px; padding:6px 12px; font:500 13px var(--font-body); cursor:pointer; }
+.chip:hover, .btn:hover{ border-color:var(--ink-2); }
+.chip[aria-pressed="true"]{ background:var(--ink); color:var(--bg); border-color:var(--ink); }
+.btn:disabled{ opacity:.45; cursor:default; }
+
+/* Module 1 grids */
+.g1{ display:grid; grid-template-columns:repeat(auto-fit, minmax(290px, 1fr)); gap:16px; }
+.g1 .card h3{ margin-bottom:8px; }
+.entry, .scores{ border-collapse:separate; border-spacing:6px; }
+.entry th, .scores th{ font:500 12px var(--font-data); color:var(--muted); text-align:center; white-space:nowrap; padding:0 2px; }
+.entry th[scope="row"], .scores th[scope="row"]{ text-align:right; }
+.entry td.zero{ text-align:center; color:var(--muted); font:13px var(--font-data); }
+.cell{ width:64px; box-sizing:border-box; font:600 16px var(--font-data); text-align:center; padding:9px 4px; border:1px solid var(--line); border-radius:6px; background:var(--surface); color:var(--ink); font-variant-numeric:tabular-nums; -moz-appearance:textfield; appearance:textfield; }
+.cell::-webkit-outer-spin-button, .cell::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+.cell-a{ box-shadow:inset 3px 0 0 var(--drug-a); }
+.cell-b{ box-shadow:inset 0 3px 0 var(--drug-b); }
+.cell-c.sel{ border-color:var(--ink); box-shadow:0 0 0 1px var(--ink); }
+.edgekey{ display:flex; flex-wrap:wrap; gap:4px 14px; font-size:12px; color:var(--ink-2); margin-top:10px; }
+.edgekey span{ display:inline-flex; align-items:center; gap:6px; }
+.ek{ width:14px; height:14px; border-radius:3px; background:var(--surface-2); }
+.ek-a{ box-shadow:inset 3px 0 0 var(--drug-a); }
+.ek-b{ box-shadow:inset 0 3px 0 var(--drug-b); }
+.ek-na{ background:repeating-linear-gradient(45deg, var(--surface-2) 0 3px, var(--line) 3px 5px); }
+.scores td{ padding:0; }
+.well{ appearance:none; display:grid; gap:4px; width:104px; padding:5px; border:1px solid var(--line); border-radius:8px; background:var(--surface); cursor:pointer; color:var(--ink); font:inherit; }
+.well:hover{ border-color:var(--ink-2); }
+.well.sel{ border-color:var(--ink); box-shadow:0 0 0 1px var(--ink); }
+.sc{ display:flex; justify-content:space-between; align-items:baseline; gap:6px; padding:5px 8px; border-radius:5px; color:var(--ink); }
+.sc i{ font:normal 500 12px var(--font-body); }
+.sc b{ font:600 14px var(--font-data); font-variant-numeric:tabular-nums; }
+.means{ display:flex; flex-wrap:wrap; gap:6px 14px; align-items:baseline; margin-top:12px; font-size:13px; color:var(--ink-2); }
+.means b{ font:600 13px var(--font-data); color:var(--ink); }
+.scale{ display:flex; align-items:center; gap:8px; font:11.5px var(--font-data); color:var(--muted); margin-top:12px; }
+.ramp{ flex:1 1 120px; max-width:220px; height:10px; border-radius:3px; background:linear-gradient(90deg, var(--ant), var(--mid), var(--syn)); background:linear-gradient(90deg, color-mix(in oklab, var(--ant) 70%, var(--mid)), var(--mid), color-mix(in oklab, var(--syn) 70%, var(--mid))); }
+
+/* Detail */
+.detail{ display:grid; gap:14px; margin-top:16px; }
+.detail .hd{ display:flex; flex-wrap:wrap; gap:4px 16px; align-items:baseline; }
+.detail .hd h3{ font-size:15px; }
+.detail .hd span{ font-size:13px; }
+.calc{ display:grid; gap:12px; }
+.calc .row{ display:grid; grid-template-columns:52px minmax(0, 1fr); gap:2px 12px; align-items:baseline; }
+.calc .tag{ font:600 12px var(--font-data); color:var(--ink-2); }
+.calc code{ font:13.5px/1.6 var(--font-data); overflow-wrap:anywhere; }
+.calc .why{ grid-column:2; color:var(--muted); font-size:13px; }
+.bars{ display:grid; gap:10px; max-width:560px; }
+.bar{ display:grid; grid-template-columns:104px minmax(0, 1fr) 44px; gap:10px; align-items:center; font-size:13px; color:var(--ink-2); }
+.bar .track{ position:relative; height:12px; background:var(--surface-2); border-radius:3px; }
+.bar .fill{ position:absolute; left:0; top:0; bottom:0; border-radius:3px; background:var(--muted); }
+.bar.obs .fill{ background:var(--ink); }
+.bar .tick{ position:absolute; top:-4px; bottom:-4px; width:2px; margin-left:-1px; background:var(--ink); }
+.bar .val{ font:13px var(--font-data); text-align:right; color:var(--ink); font-variant-numeric:tabular-nums; }
+
+/* Controls */
+.rail{ display:grid; gap:18px; }
+.field{ display:grid; gap:6px; }
+.field label{ display:flex; justify-content:space-between; gap:8px; font-size:13px; color:var(--ink-2); }
+.field output{ font:600 13px var(--font-data); color:var(--ink); }
+input[type="range"]{ width:100%; margin:0; accent-color:var(--ink); }
+.field.a input[type="range"]{ accent-color:var(--drug-a); }
+.field.b input[type="range"]{ accent-color:var(--drug-b); }
+.field.off{ opacity:.45; }
+fieldset{ border:0; margin:0; padding:0; min-width:0; }
+legend{ font-size:13px; color:var(--ink-2); margin-bottom:6px; padding:0; }
+.seg{ display:flex; border:1px solid var(--line); border-radius:8px; padding:3px; gap:3px; background:var(--surface-2); }
+.seg label{ flex:1; position:relative; }
+.seg input{ position:absolute; inset:0; opacity:0; margin:0; cursor:pointer; }
+.seg span{ display:block; text-align:center; padding:7px 6px; border-radius:6px; font:600 13px var(--font-body); color:var(--ink-2); }
+.seg.small span{ padding:7px 2px; font:600 12px var(--font-data); }
+.seg input:checked + span{ background:var(--surface); color:var(--ink); box-shadow:0 0 0 1px var(--line); }
+.seg input:focus-visible + span{ outline:2px solid var(--drug-a); outline-offset:1px; }
+.hint{ margin:6px 0 0; font-size:12.5px; color:var(--muted); }
+.hint code{ font:12px var(--font-data); color:var(--ink-2); }
+.group{ display:grid; gap:12px; padding-top:14px; border-top:1px solid var(--line); }
+.group:first-child{ padding-top:0; border-top:0; }
+.group h4{ margin:0; font:600 13.5px var(--font-body); display:flex; gap:8px; align-items:center; }
+.group .fields{ display:grid; gap:12px; }
+.sw{ display:inline-block; width:16px; height:3px; border-radius:2px; }
+.sw-a{ background:var(--drug-a); }
+.sw-b{ background:var(--drug-b); }
+.row-btn{ display:flex; justify-content:space-between; align-items:center; gap:8px; }
+
+/* Readouts */
+.readout{ width:100%; border-collapse:collapse; font-size:13px; }
+.readout th, .readout td{ padding:6px 4px; text-align:right; border-bottom:1px solid var(--line); }
+.readout thead th{ font:500 11.5px var(--font-body); color:var(--muted); }
+.readout th[scope="row"]{ text-align:left; font-weight:600; }
+.readout td{ font:13px var(--font-data); font-variant-numeric:tabular-nums; }
+.pill{ display:inline-block; padding:2px 7px; border-radius:5px; font-weight:600; color:var(--ink); }
+.dosebar{ display:flex; gap:16px; font-size:13px; color:var(--ink-2); }
+.dosebar b{ font:600 13px var(--font-data); color:var(--ink); }
+.work{ display:grid; gap:4px; font-size:12.5px; }
+.work p{ margin:0; display:grid; grid-template-columns:62px minmax(0, 1fr); gap:8px; }
+.work span{ color:var(--muted); }
+.work code{ font:12.5px var(--font-data); overflow-wrap:anywhere; }
+.steps{ display:grid; gap:10px; margin:0; padding:0; list-style:none; }
+.steps li{ display:grid; grid-template-columns:22px minmax(0, 1fr); gap:10px; align-items:baseline; font-size:14px; }
+.steps .sn{ font:600 11px/20px var(--font-data); width:20px; height:20px; text-align:center; border:1px solid var(--line); border-radius:999px; color:var(--ink-2); }
+.steps code{ font:13px var(--font-data); overflow-wrap:anywhere; }
+.verdict{ font-weight:600; }
+.facts{ display:grid; gap:6px; font-size:13.5px; margin:0; padding:0; list-style:none; }
+.facts b{ font:600 13px var(--font-data); }
+
+/* Charts */
+.chead{ display:flex; flex-wrap:wrap; justify-content:space-between; gap:6px 16px; align-items:baseline; margin-bottom:8px; }
+.keys{ display:flex; flex-wrap:wrap; gap:4px 14px; font-size:12px; color:var(--ink-2); }
+.key{ display:inline-flex; align-items:center; gap:6px; }
+.key svg{ overflow:visible; }
+.chart{ width:100%; }
+.chart svg{ display:block; overflow:visible; }
+.grid{ stroke:var(--grid); stroke-width:1; }
+.axis{ stroke:var(--axis); stroke-width:1; }
+.xt{ stroke:var(--axis); stroke-width:1; }
+.zero{ stroke:var(--ink-2); stroke-width:1.25; }
+.tick{ fill:var(--muted); font:11px var(--font-data); }
+.axlab{ fill:var(--muted); font:11px var(--font-body); }
+.glab{ fill:var(--ink-2); font:600 11px var(--font-data); }
+.band-lab{ fill:var(--muted); font:500 11px var(--font-body); }
+.lbl{ fill:var(--ink); font:600 11.5px var(--font-body); }
+.lbl-sm{ fill:var(--ink-2); font:500 11px var(--font-body); }
+.guide{ stroke:var(--muted); stroke-width:1; stroke-dasharray:3 3; }
+.dosev{ stroke:var(--axis); stroke-width:1; stroke-dasharray:2 4; }
+.curve-a{ fill:none; stroke:var(--drug-a); stroke-width:2.25; stroke-linejoin:round; }
+.curve-b{ fill:none; stroke:var(--drug-b); stroke-width:2.25; stroke-linejoin:round; }
+.curve-faint{ fill:none; stroke:var(--drug-a); stroke-width:2; opacity:.4; }
+.plat-a{ stroke:var(--drug-a); stroke-width:1.25; stroke-dasharray:1 4; stroke-linecap:round; }
+.plat-b{ stroke:var(--drug-b); stroke-width:1.25; stroke-dasharray:1 4; stroke-linecap:round; }
+.drop-a{ stroke:var(--drug-a); stroke-width:1.25; stroke-dasharray:4 3; }
+.drop-b{ stroke:var(--drug-b); stroke-width:1.25; stroke-dasharray:4 3; }
+.level{ stroke:var(--ink-2); stroke-width:1.5; stroke-dasharray:6 4; }
+.base-line{ stroke:var(--drug-b); stroke-width:1.5; stroke-dasharray:1 4; stroke-linecap:round; }
+.hsa-line{ fill:none; stroke:var(--ink-2); stroke-width:2; stroke-dasharray:6 4; }
+.bliss-line{ fill:none; stroke:var(--ink); stroke-width:2; stroke-linejoin:round; }
+.loewe-line{ fill:none; stroke:var(--ink); stroke-width:3; stroke-dasharray:0.5 6; stroke-linecap:round; }
+.zip-exp{ fill:none; stroke:var(--ink-2); stroke-width:2; stroke-dasharray:6 4; }
+.zip-fit{ fill:none; stroke:var(--ink); stroke-width:2.25; stroke-linejoin:round; }
+.iso{ stroke:var(--ink-2); stroke-width:2; }
+.br-syn{ stroke:var(--syn); stroke-width:3; stroke-linecap:round; }
+.br-ant{ stroke:var(--ant); stroke-width:3; stroke-linecap:round; }
+.dot-a{ fill:var(--drug-a); stroke:var(--surface); stroke-width:2; }
+.dot-b{ fill:var(--drug-b); stroke:var(--surface); stroke-width:2; }
+.dot-ink{ fill:var(--ink); stroke:var(--surface); stroke-width:2; }
+.ring-a{ fill:var(--surface); stroke:var(--drug-a); stroke-width:2; }
+.ring-b{ fill:var(--surface); stroke:var(--drug-b); stroke-width:2; }
+.exp-hsa{ fill:var(--surface); stroke:var(--ink-2); stroke-width:2; }
+.exp-bliss{ fill:var(--surface); stroke:var(--ink); stroke-width:2; }
+.pt-hsa{ fill:var(--surface); stroke:var(--ink-2); stroke-width:2; }
+.pt-bliss{ fill:var(--ink); stroke:var(--surface); stroke-width:2; }
+.flip{ stroke:var(--ink); stroke-width:2; }
+.band-syn{ fill:var(--syn); fill-opacity:.08; }
+.band-ant{ fill:var(--ant); fill-opacity:.07; }
+.msg{ fill:var(--ink-2); font:500 13px var(--font-body); }
+
+/* Matrices */
+.summary{ display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px; }
+.stat{ background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:10px 12px; display:grid; gap:2px; }
+.stat span{ font:600 12px var(--font-body); color:var(--ink-2); }
+.stat b{ font:600 20px/1.2 var(--font-data); font-variant-numeric:tabular-nums; }
+.stat small{ font-size:11.5px; color:var(--muted); }
+.mats{ display:grid; grid-template-columns:repeat(auto-fit, minmax(290px, 1fr)); gap:16px; }
+.mat .meta{ display:flex; flex-wrap:wrap; justify-content:space-between; gap:4px 8px; align-items:baseline; margin-bottom:8px; }
+.mat .mean{ font:12.5px var(--font-data); color:var(--ink-2); }
+.mt{ border-collapse:separate; border-spacing:2px; }
+.mt th{ font:500 10.5px var(--font-data); color:var(--muted); padding:2px; text-align:center; white-space:nowrap; }
+.mt th[scope="row"]{ text-align:right; padding-right:6px; }
+.mt td{ width:40px; min-width:38px; height:36px; text-align:center; font:600 12px/1.15 var(--font-data); border-radius:4px; color:var(--ink); font-variant-numeric:tabular-nums; }
+.mt td .w{ display:block; font:500 9.5px/1 var(--font-data); color:var(--ink-2); margin-top:2px; }
+.mt td.blank{ background:transparent; }
+.mt td.na{ background:repeating-linear-gradient(45deg, var(--surface-2) 0 4px, var(--line) 4px 6px); color:var(--muted); font-weight:500; font-size:10.5px; }
+.mt td.mono-a{ box-shadow:inset 3px 0 0 var(--drug-a); }
+.mt td.mono-b{ box-shadow:inset 0 3px 0 var(--drug-b); }
+.axes-note{ font-size:12.5px; color:var(--ink-2); margin:0; }
+.ztab td, .ztab th{ white-space:nowrap; }
+
+/* Try this */
+.try{ margin-top:28px; padding-top:18px; border-top:1px solid var(--line); display:grid; gap:8px; max-width:80ch; }
+.try h3{ font:600 11.5px var(--font-data); letter-spacing:.09em; text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
+.try details{ border:1px solid var(--line); border-radius:8px; background:var(--surface); padding:10px 14px; }
+.try summary{ cursor:pointer; font-weight:500; }
+.try details p{ margin:8px 0 2px; color:var(--ink-2); }
+@media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <p class="eyebrow">Drug combination null models</p>
+    <div class="themer" role="group" aria-label="Colour theme">
+      <button type="button" data-mode="light" aria-pressed="true">Light</button>
+      <button type="button" data-mode="dark" aria-pressed="false">Dark</button>
+    </div>
+  </div>
+  <header class="top">
+    <div>
+      <h1>Synergy Model Sandbox</h1>
+      <p class="lede">Every synergy score is observed minus expected. HSA, Bliss, Loewe and ZIP differ only in what they expect when two drugs don't interact. Change the inputs and watch where they disagree.</p>
+    </div>
+    <div class="formula" aria-label="Definitions">
+      <div class="lead">score = observed − expected</div>
+      <div><span class="k">HSA</span>max(E<sub>A</sub>, E<sub>B</sub>)</div>
+      <div><span class="k">Bliss</span>E<sub>A</sub> + E<sub>B</sub> − E<sub>A</sub>·E<sub>B</sub>/100</div>
+      <div><span class="k">Loewe</span>E where d<sub>A</sub>/D<sub>A</sub>(E) + d<sub>B</sub>/D<sub>B</sub>(E) = 1</div>
+      <div><span class="k">ZIP</span>Bliss on fitted curves, vs refitted combination curves</div>
+      <small>E in % inhibition · scores in percentage points (pp) · positive = synergy</small>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button class="tab" role="tab" id="tab-grid" aria-controls="p-grid" data-view="grid"><span class="n">1</span>Score a grid</button>
+    <button class="tab" role="tab" id="tab-sham" aria-controls="p-sham" data-view="sham"><span class="n">2</span>Sham test</button>
+    <button class="tab" role="tab" id="tab-loewe" aria-controls="p-loewe" data-view="loewe"><span class="n">3</span>Loewe</button>
+    <button class="tab" role="tab" id="tab-zip" aria-controls="p-zip" data-view="zip"><span class="n">4</span>ZIP</button>
+    <button class="tab" role="tab" id="tab-all" aria-controls="p-all" data-view="all"><span class="n">5</span>All models</button>
+  </nav>
+
+  <!-- 1 · Score a grid -->
+  <section id="p-grid" role="tabpanel" aria-labelledby="tab-grid">
+    <div class="phead">
+      <h2>Score a 2 × 2 grid by hand: HSA and Bliss</h2>
+      <p>Type single-drug and combination effects. Click a combination well to see the arithmetic for both models. Loewe and ZIP need fitted dose-response curves, so four numbers aren't enough for them; they have their own tabs.</p>
+    </div>
+    <div class="presets" id="presets" role="group" aria-label="Example data">
+      <span class="lab">Load</span>
+      <button type="button" class="chip" data-preset="chat" aria-pressed="true">Chat example</button>
+      <button type="button" class="chip" data-preset="additive" aria-pressed="false">Bliss-additive</button>
+      <button type="button" class="chip" data-preset="maxeff" aria-pressed="false">Different max effects</button>
+      <button type="button" class="chip" data-preset="inactive" aria-pressed="false">Inactive partner</button>
+    </div>
+    <div class="g1">
+      <div class="card">
+        <h3>Measured effects (% inhibition)</h3>
+        <div class="tw"><table class="entry" id="entry"></table></div>
+        <div class="edgekey"><span><i class="ek ek-a"></i>Drug A alone</span><span><i class="ek ek-b"></i>Drug B alone</span></div>
+        <p class="note">Neither model uses the concentrations themselves, only the measured effects.</p>
+      </div>
+      <div class="card">
+        <h3>Scores (pp)</h3>
+        <div class="tw"><table class="scores" id="scores1"></table></div>
+        <div class="means" id="means1"></div>
+        <div class="scale" aria-hidden="true"><span>−30</span><div class="ramp"></div><span>+30 pp</span></div>
+      </div>
+    </div>
+    <div class="card detail" id="detail1" aria-live="polite"></div>
+    <div class="try">
+      <h3>Try this</h3>
+      <details><summary>Load Bliss-additive. Why does HSA still call synergy?</summary><p>Every combination equals its Bliss expectation, so Bliss reads 0. HSA compares only against the stronger drug and ignores what the weaker one adds, so plain additivity scores as synergy.</p></details>
+      <details><summary>Load Inactive partner and compare the two expected values.</summary><p>When B does nothing alone, Bliss expects 20 + 0 − 0 = 20, the same as HSA's max(20, 0). The models only disagree when both drugs have an effect on their own.</p></details>
+      <details><summary>Load Different max effects and click each well.</summary><p>Drug A plateaus at 40%. At B 10 nM, drug A sets the HSA bar; at B 100 nM, drug B does. HSA picks whichever measured value is higher in that well, so the plateau never breaks it.</p></details>
+      <details><summary>Make HSA call antagonism.</summary><p>Set a combination below its best single drug, for example A 100 nM + B 100 nM = 55 while B alone at 100 nM is 60.</p></details>
+      <details><summary>Try to make Bliss expect less than HSA.</summary><p>You can't with values between 0 and 100. Under Bliss the weaker drug always adds something, so Bliss expected ≥ HSA expected and every Bliss score ≤ its HSA score.</p></details>
+    </div>
+  </section>
+
+  <!-- 2 · Sham test -->
+  <section id="p-sham" role="tabpanel" aria-labelledby="tab-sham" hidden>
+    <div class="phead">
+      <h2>Sham test: drug A combined with itself</h2>
+      <p>A at dose d plus A at dose d is just A at 2d. Nothing interacts, so a sound null model should score 0. IC50 is fixed at 1 µM.</p>
+    </div>
+    <div class="split">
+      <div class="card rail">
+        <fieldset>
+          <legend>Curve shape</legend>
+          <div class="seg">
+            <label><input type="radio" name="shape2" id="shape2-hill" value="hill" checked><span>Hill</span></label>
+            <label><input type="radio" name="shape2" id="shape2-exp" value="exp"><span>Exponential</span></label>
+          </div>
+          <p class="hint" id="shapehint"></p>
+        </fieldset>
+        <div class="field a" id="f-h2"><label for="h2">Hill slope h <output id="h2o">1.0</output></label><input type="range" id="h2" min="0.5" max="4" step="0.1" value="1"></div>
+        <div class="field a"><label for="d2">Dose d of each copy <output id="d2o">1 µM</output></label><input type="range" id="d2" min="-1.3" max="1" step="0.01" value="0"></div>
+        <div id="read2" aria-live="polite"></div>
+      </div>
+      <div class="stage">
+        <div class="card">
+          <div class="chead">
+            <h3>Dose-response of drug A</h3>
+            <div class="keys">
+              <span class="key"><svg width="12" height="12" aria-hidden="true"><circle class="dot-a" cx="6" cy="6" r="4.5"/></svg>measured</span>
+              <span class="key"><svg width="12" height="12" aria-hidden="true"><path class="exp-hsa" d="M6 1L11 6L6 11L1 6Z"/></svg>HSA expects</span>
+              <span class="key"><svg width="12" height="12" aria-hidden="true"><circle class="exp-bliss" cx="6" cy="6" r="4.5"/></svg>Bliss expects</span>
+              <span class="key"><svg width="8" height="14" aria-hidden="true"><line class="br-syn" x1="4" x2="4" y1="2" y2="12"/></svg>gap = score</span>
+            </div>
+          </div>
+          <div class="chart" id="c2a" style="height:250px"></div>
+          <p class="note">Loewe expects exactly the observed point here: a drug with itself is dose-additive by definition.</p>
+        </div>
+        <div class="card">
+          <div class="chead">
+            <h3>Sham score across doses</h3>
+            <div class="keys">
+              <span class="key"><svg width="22" height="8" aria-hidden="true"><line class="bliss-line" x1="0" x2="22" y1="4" y2="4"/></svg>Bliss</span>
+              <span class="key"><svg width="22" height="8" aria-hidden="true"><line class="hsa-line" x1="0" x2="22" y1="4" y2="4"/></svg>HSA</span>
+              <span class="key"><svg width="22" height="8" aria-hidden="true"><line class="loewe-line" x1="1" x2="21" y1="4" y2="4"/></svg>Loewe</span>
+              <span class="key"><svg width="6" height="14" aria-hidden="true"><line class="flip" x1="3" x2="3" y1="2" y2="12"/></svg>Bliss changes sign</span>
+            </div>
+          </div>
+          <div class="chart" id="c2b" style="height:230px"></div>
+          <p class="note" id="flip2"></p>
+          <p class="note">ZIP's expected value is Bliss computed on fitted curves, so on clean data it fails this test the same way Bliss does. See it in All models with the Same drug setting.</p>
+        </div>
+      </div>
+    </div>
+    <div class="try">
+      <h3>Try this</h3>
+      <details><summary>Keep h = 1 and drag the dose across the whole range.</summary><p>Bliss stays negative everywhere. A slope-1 curve has diminishing returns, so doubling the dose always delivers less than Bliss expects. Loewe stays at 0.</p></details>
+      <details><summary>Set h = 2 and find where Bliss changes sign.</summary><p>At about 1.41 µM, which is √2 × IC50. Below it the drug looks synergistic with itself; above it, antagonistic.</p></details>
+      <details><summary>Push h to 4 and set d near 0.8 µM.</summary><p>Bliss reports roughly +37 pp of synergy between a drug and itself. A steep curve alone can fake a large score.</p></details>
+      <details><summary>Switch the curve to Exponential.</summary><p>Bliss now reads 0 at every dose, like Loewe. Exponential survival, where each unit of drug kills the same fraction of the cells still alive, is the only shape on which Bliss and Loewe agree that nothing interacts. HSA still reads positive.</p></details>
+      <details><summary>Why is HSA never negative in this test?</summary><p>HSA expects E(d), and the observed value is E(2d). On any rising curve E(2d) ≥ E(d), so the extra drug alone shows up as synergy.</p></details>
+    </div>
+  </section>
+
+  <!-- 3 · Loewe -->
+  <section id="p-loewe" role="tabpanel" aria-labelledby="tab-loewe" hidden>
+    <div class="phead">
+      <h2>Loewe: how much of each drug alone would do the same job?</h2>
+      <p>Pick one combination well and the effect you measured in it. Loewe reads each single-drug curve backwards to find the dose that would reach that effect alone, then adds up what fraction of those doses you actually used.</p>
+    </div>
+    <div class="split">
+      <div class="card rail">
+        <div class="group">
+          <h4>This well</h4>
+          <div class="fields">
+            <div class="field a"><label for="l-da">Dose of A, d<sub>A</sub> <output id="l-dao">0.5 µM</output></label><input type="range" id="l-da" min="0" max="9" step="1" value="4"></div>
+            <div class="field b"><label for="l-db">Dose of B, d<sub>B</sub> <output id="l-dbo">1 µM</output></label><input type="range" id="l-db" min="0" max="9" step="1" value="5"></div>
+            <div class="field"><label for="l-e">Observed effect E <output id="l-eo">60%</output></label><input type="range" id="l-e" min="1" max="99" step="1" value="60"></div>
+          </div>
+        </div>
+        <div class="group">
+          <h4><span class="sw sw-a"></span>Drug A</h4>
+          <div class="fields">
+            <div class="field a"><label for="la-ic">IC50 <output id="la-ico">1 µM</output></label><input type="range" id="la-ic" min="-1" max="1" step="0.05" value="0"></div>
+            <div class="field a"><label for="la-h">Hill slope <output id="la-ho">1.0</output></label><input type="range" id="la-h" min="0.5" max="4" step="0.1" value="1"></div>
+            <div class="field a"><label for="la-em">Maximum effect <output id="la-emo">100%</output></label><input type="range" id="la-em" min="20" max="100" step="5" value="100"></div>
+          </div>
+        </div>
+        <div class="group">
+          <h4><span class="sw sw-b"></span>Drug B</h4>
+          <div class="fields">
+            <div class="field b"><label for="lb-ic">IC50 <output id="lb-ico">3.2 µM</output></label><input type="range" id="lb-ic" min="-1" max="1" step="0.05" value="0.5"></div>
+            <div class="field b"><label for="lb-h">Hill slope <output id="lb-ho">2.0</output></label><input type="range" id="lb-h" min="0.5" max="4" step="0.1" value="2"></div>
+            <div class="field b"><label for="lb-em">Maximum effect <output id="lb-emo">100%</output></label><input type="range" id="lb-em" min="20" max="100" step="5" value="100"></div>
+          </div>
+        </div>
+      </div>
+      <div class="stage">
+        <div class="card">
+          <div class="chead">
+            <h3>Step 1: read each curve backwards</h3>
+            <div class="keys">
+              <span class="key"><svg width="22" height="8" aria-hidden="true"><line class="curve-a" x1="0" x2="22" y1="4" y2="4"/></svg>Drug A</span>
+              <span class="key"><svg width="22" height="8" aria-hidden="true"><line class="curve-b" x1="0" x2="22" y1="4" y2="4"/></svg>Drug B</span>
+              <span class="key"><svg width="22" height="8" aria-hidden="true"><line class="level" x1="0" x2="22" y1="4" y2="4"/></svg>observed E</span>
+              <span class="key"><svg width="12" height="12" aria-hidden="true"><circle class="ring-a" cx="6" cy="6" r="4.5"/></svg>dose alone for E</span>
+              <span class="key"><svg width="12" height="10" aria-hidden="true"><path class="dot-ink" d="M6 1L11 9L1 9Z"/></svg>dose in the well</span>
+            </div>
+          </div>
+          <div class="chart" id="cL1" style="height:250px"></div>
+        </div>
+        <div class="card">
+          <div class="chead">
+            <h3>Step 2: the isobologram</h3>
+            <div class="keys">
+              <span class="key"><svg width="22" height="8" aria-hidden="true"><line class="iso" x1="0" x2="22" y1="4" y2="4"/></svg>dose-additive pairs for E</span>
+              <span class="key"><svg width="12" height="12" aria-hidden="true"><circle class="dot-ink" cx="6" cy="6" r="4.5"/></svg>this well</span>
+            </div>
+          </div>
+          <div class="chart" id="cL2" style="height:270px"></div>
+          <p class="note">Every point on the line is a pair of doses that reaches E if the drugs are dose-additive. A well below the line reached E with less drug: synergy.</p>
+        </div>
+        <div class="card" id="readL" aria-live="polite"></div>
+      </div>
+    </div>
+    <div class="try">
+      <h3>Try this</h3>
+      <details><summary>Drag the observed effect until CI = 1.00.</summary><p>The well lands on the additive line and the Loewe score is about 0. Below the line means less drug did the job, so synergy; above it, antagonism.</p></details>
+      <details><summary>Raise the observed effect and watch the line.</summary><p>A higher effect needs more of each drug alone, so D<sub>A</sub> and D<sub>B</sub> grow, the line moves outward, and the same doses count as more synergistic.</p></details>
+      <details><summary>Lower drug B's maximum effect below the observed effect.</summary><p>Drug B alone can never reach that level, so D<sub>B</sub> doesn't exist, the line has no end on the B axis, and the CI is undefined. This is the breakdown with different maximum effects.</p></details>
+      <details><summary>Compare the three scores in the results table.</summary><p>They answer different questions. Loewe asks about dose equivalence, Bliss about independent probabilities, HSA about the best single drug, so one well can get three different scores.</p></details>
+    </div>
+  </section>
+
+  <!-- 4 · ZIP -->
+  <section id="p-zip" role="tabpanel" aria-labelledby="tab-zip" hidden>
+    <div class="phead">
+      <h2>ZIP: does drug B shift drug A's curve?</h2>
+      <p>Hold drug B at one dose and look at drug A's dose-response on top of it. If the drugs don't interact, A keeps its own IC50 and slope and simply starts from B's effect. ZIP fits the measured curve and compares it with that expectation. The difference is δ.</p>
+    </div>
+    <div class="split">
+      <div class="card rail">
+        <div class="field"><label for="z-s">True interaction: potency shift <output id="z-so">+0.60</output></label><input type="range" id="z-s" min="-1" max="1" step="0.05" value="0.6"></div>
+        <p class="hint" style="margin-top:-10px">How the wells were simulated. At B's full effect, A's IC50 is divided by 10<sup>shift</sup>. Positive means B makes A more potent.</p>
+        <fieldset>
+          <legend>Drug B held at (µM)</legend>
+          <div class="seg small" id="z-dose">
+            <label><input type="radio" name="zdose" value="0"><span>0.1</span></label>
+            <label><input type="radio" name="zdose" value="1"><span>0.3</span></label>
+            <label><input type="radio" name="zdose" value="2"><span>1</span></label>
+            <label><input type="radio" name="zdose" value="3" checked><span>3</span></label>
+            <label><input type="radio" name="zdose" value="4"><span>10</span></label>
+          </div>
+        </fieldset>
+        <div class="field"><label for="z-n">Measurement noise (SD) <output id="z-no">0 pp</output></label><input type="range" id="z-n" min="0" max="10" step="0.5" value="0"></div>
+        <div class="row-btn"><span class="hint" style="margin:0">Same noise SD, new random draw</span><button type="button" class="btn" id="z-redraw">New noise</button></div>
+        <p class="hint">Drug A: IC50 1 µM, slope 1. Drug B: IC50 3.2 µM, slope 2. Both reach 100%, as ZIP assumes.</p>
+        <ul class="facts" id="readZ" aria-live="polite"></ul>
+      </div>
+      <div class="stage">
+        <div class="card">
+          <div class="chead">
+            <h3 id="zTitle">Drug A with B held at 3 µM</h3>
+            <div class="keys">
+              <span class="key"><svg width="22" height="8" aria-hidden="true"><line class="curve-faint" x1="0" x2="22" y1="4" y2="4"/></svg>A alone</span>
+              <span class="key"><svg width="22" height="8" aria-hidden="true"><line class="base-line" x1="1" x2="21" y1="4" y2="4"/></svg>B alone</span>
+              <span class="key"><svg width="22" height="8" aria-hidden="true"><line class="zip-exp" x1="0" x2="22" y1="4" y2="4"/></svg>ZIP expects</span>
+              <span class="key"><svg width="12" height="12" aria-hidden="true"><circle class="dot-ink" cx="6" cy="6" r="4.5"/></svg>measured wells</span>
+              <span class="key"><svg width="22" height="8" aria-hidden="true"><line class="zip-fit" x1="0" x2="22" y1="4" y2="4"/></svg>fitted</span>
+              <span class="key"><svg width="8" height="14" aria-hidden="true"><line class="br-syn" x1="4" x2="4" y1="2" y2="12"/></svg>δ</span>
+            </div>
+          </div>
+          <div class="chart" id="cZ1" style="height:260px"></div>
+        </div>
+        <div class="card">
+          <div class="chead"><h3>Well by well</h3><span class="muted" style="font-size:12.5px">this direction only</span></div>
+          <div class="tw"><table class="readout ztab" id="tabZ"></table></div>
+          <p class="note">Raw Bliss scores each noisy well directly. ZIP's δ scores the fitted curve, so noise averages out. Full ZIP also fits B's curve at each fixed dose of A and averages the two δ values; the All models tab does both.</p>
+        </div>
+      </div>
+    </div>
+    <div class="try">
+      <h3>Try this</h3>
+      <details><summary>Set the potency shift to 0.</summary><p>The fitted curve lands exactly on ZIP's expectation and δ is 0 at every dose. Drug A kept its own IC50 and slope; it just started from B's effect.</p></details>
+      <details><summary>Move the shift positive, then negative.</summary><p>A positive shift moves the fitted curve left (lower IC50): B made A more potent and δ turns positive. A negative shift moves it right and δ turns negative.</p></details>
+      <details><summary>Add 5 pp of noise and press New noise a few times.</summary><p>Raw Bliss jumps around from well to well because it scores each noisy point. δ moves much less because it scores the fitted curve. That smoothing is the main practical reason to use ZIP.</p></details>
+      <details><summary>Keep the shift and hold B at 0.1, then 3, then 10 µM.</summary><p>At 0.1 µM drug B barely acts, so it barely shifts A and δ is tiny. At 10 µM the shift is largest, but B alone already gives about 90%, leaving little room above it, so δ shrinks again. The biggest δ sits at intermediate doses.</p></details>
+    </div>
+  </section>
+
+  <!-- 5 · All models -->
+  <section id="p-all" role="tabpanel" aria-labelledby="tab-all" hidden>
+    <div class="phead">
+      <h2>All four models on one 5 × 5 matrix</h2>
+      <p>Define two drugs, choose what is really happening in the wells, and score the whole grid four ways. HSA and Bliss use the measured single-drug wells. Loewe and ZIP use the drugs' curves, treated here as perfectly fitted.</p>
+    </div>
+    <div class="split">
+      <div class="card rail">
+        <div class="group">
+          <fieldset>
+            <legend>What is really happening</legend>
+            <div class="seg">
+              <label><input type="radio" name="truth5" value="indep" checked><span>Independent</span></label>
+              <label><input type="radio" name="truth5" value="sham"><span>Same drug</span></label>
+              <label><input type="radio" name="truth5" value="shift"><span>Potency shift</span></label>
+            </div>
+            <p class="hint" id="truthhint"></p>
+          </fieldset>
+          <div class="field" id="f-s5"><label for="a-s">Shift strength <output id="a-so">+0.60</output></label><input type="range" id="a-s" min="-1" max="1" step="0.05" value="0.6"></div>
+          <div class="field"><label for="a-n">Measurement noise (SD) <output id="a-no">0 pp</output></label><input type="range" id="a-n" min="0" max="10" step="0.5" value="0"></div>
+          <div class="row-btn"><span class="hint" style="margin:0">Same noise SD, new random draw</span><button type="button" class="btn" id="a-redraw">New noise</button></div>
+        </div>
+        <div class="group">
+          <h4><span class="sw sw-a"></span>Drug A</h4>
+          <div class="fields">
+            <div class="field a"><label for="aa-ic">IC50 <output id="aa-ico">1 µM</output></label><input type="range" id="aa-ic" min="-1" max="1" step="0.05" value="0"></div>
+            <div class="field a"><label for="aa-h">Hill slope <output id="aa-ho">1.0</output></label><input type="range" id="aa-h" min="0.5" max="4" step="0.1" value="1"></div>
+            <div class="field a"><label for="aa-em">Maximum effect <output id="aa-emo">100%</output></label><input type="range" id="aa-em" min="20" max="100" step="5" value="100"></div>
+          </div>
+        </div>
+        <div class="group">
+          <h4><span class="sw sw-b"></span>Drug B</h4>
+          <p class="hint" id="bnote" hidden>Drug B is a copy of drug A in this mode.</p>
+          <div class="fields" id="bfields">
+            <div class="field b"><label for="ab-ic">IC50 <output id="ab-ico">3.2 µM</output></label><input type="range" id="ab-ic" min="-1" max="1" step="0.05" value="0.5"></div>
+            <div class="field b"><label for="ab-h">Hill slope <output id="ab-ho">2.0</output></label><input type="range" id="ab-h" min="0.5" max="4" step="0.1" value="2"></div>
+            <div class="field b"><label for="ab-em">Maximum effect <output id="ab-emo">100%</output></label><input type="range" id="ab-em" min="20" max="100" step="5" value="100"></div>
+          </div>
+        </div>
+        <p class="hint">IC50 here is the dose giving half of that drug's own maximum effect.</p>
+      </div>
+      <div class="stage">
+        <div class="summary" id="sum5" aria-live="polite"></div>
+        <div class="card">
+          <div class="chead">
+            <h3>Single-drug curves</h3>
+            <div class="keys">
+              <span class="key"><svg width="22" height="8" aria-hidden="true"><line class="curve-a" x1="0" x2="22" y1="4" y2="4"/></svg>Drug A</span>
+              <span class="key" id="keyB"><svg width="22" height="8" aria-hidden="true"><line class="curve-b" x1="0" x2="22" y1="4" y2="4"/></svg>Drug B</span>
+              <span class="key"><svg width="22" height="8" aria-hidden="true"><line class="plat-a" x1="1" x2="21" y1="4" y2="4"/></svg>maximum effect</span>
+              <span class="key"><svg width="8" height="14" aria-hidden="true"><line class="dosev" x1="4" x2="4" y1="0" y2="14"/></svg>doses in the grid</span>
+            </div>
+          </div>
+          <div class="chart" id="c5" style="height:230px"></div>
+        </div>
+        <p class="axes-note">Rows: drug A dose (µM). Columns: drug B dose (µM). Hover a well for exact values.</p>
+        <div class="mats">
+          <div class="card mat">
+            <div class="meta"><h3>Observed (%)</h3><span class="mean">0 row/column = single drug</span></div>
+            <div class="tw"><table class="mt" id="m-obs"></table></div>
+            <div class="edgekey"><span><i class="ek ek-a"></i>A alone</span><span><i class="ek ek-b"></i>B alone</span></div>
+          </div>
+          <div class="card mat">
+            <div class="meta"><h3>HSA score (pp)</h3><span class="mean" id="mean-h"></span></div>
+            <div class="tw"><table class="mt" id="m-hsa"></table></div>
+            <p class="note">Small letter = which drug alone set the HSA bar in that well.</p>
+          </div>
+          <div class="card mat">
+            <div class="meta"><h3>Bliss score (pp)</h3><span class="mean" id="mean-b"></span></div>
+            <div class="tw"><table class="mt" id="m-bliss"></table></div>
+            <div class="scale" aria-hidden="true"><span>−30</span><div class="ramp"></div><span>+30 pp</span></div>
+          </div>
+          <div class="card mat">
+            <div class="meta"><h3>Loewe score (pp)</h3><span class="mean" id="mean-l"></span></div>
+            <div class="tw"><table class="mt" id="m-loewe"></table></div>
+            <div class="edgekey"><span><i class="ek ek-na"></i>undefined: one drug alone can't reach the needed effect</span></div>
+          </div>
+          <div class="card mat">
+            <div class="meta"><h3>ZIP δ (pp)</h3><span class="mean" id="mean-z"></span></div>
+            <div class="tw"><table class="mt" id="m-zip"></table></div>
+            <p class="note">Average of the two refitted directions, minus Bliss on the drugs' curves.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="try">
+      <h3>Try this</h3>
+      <details><summary>Start with Independent and compare the four matrices.</summary><p>Bliss and ZIP read 0 in every well, because the wells were filled with their own idea of no interaction. HSA reads positive and Loewe is non-zero: each model defines "no interaction" differently.</p></details>
+      <details><summary>Switch to Same drug.</summary><p>Loewe reads 0 everywhere, since a drug with itself is dose-additive by definition. Bliss and ZIP go negative at slope 1, and HSA stays positive.</p></details>
+      <details><summary>Choose Potency shift and move the strength.</summary><p>All four respond, each from its own baseline. Without noise, ZIP and Bliss agree almost exactly, because ZIP's expected value is Bliss. ZIP's advantage shows up once you add noise.</p></details>
+      <details><summary>Under Independent, lower drug B's maximum effect to 60%.</summary><p>Bliss stays at 0. ZIP drifts away from 0 because it assumes the refitted combination curves rise to 100%. Loewe can't be computed in wells where drug A alone already exceeds B's 60% ceiling.</p></details>
+      <details><summary>Add 5 pp of noise.</summary><p>HSA, Bliss and Loewe change from well to well with the noise. ZIP is smoother because it scores fitted curves rather than single wells.</p></details>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  const $ = (s, r) => (r || document).querySelector(s);
+  const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+  const M = '−';
+
+  /* ---------- theme ---------- */
+  const THEME_KEY = 'synergy-sandbox-theme';
+  function setTheme(t) {
+    document.documentElement.setAttribute('data-sbx', t);
+    $$('.themer button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === t)));
+    try { localStorage.setItem(THEME_KEY, t); } catch (e) {}
+  }
+  let savedTheme = 'light';
+  try { savedTheme = localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light'; } catch (e) {}
+  setTheme(savedTheme);
+  $$('.themer button').forEach(b => b.addEventListener('click', () => setTheme(b.dataset.mode)));
+
+  /* ---------- formatting (symmetric rounding to 0.1) ---------- */
+  const r1 = v => Math.sign(v) * Math.round(Math.abs(v) * 10) / 10;
+  const fE = v => { const x = r1(v); return Number.isInteger(x) ? String(x) : x.toFixed(1); };
+  const fS = v => { const x = r1(v); if (x === 0) return '0'; const a = Math.abs(x); return (x > 0 ? '+' : M) + (Number.isInteger(a) ? String(a) : a.toFixed(1)); };
+  const f1 = v => { const x = r1(v); return (x === 0 ? 0 : x).toFixed(1); };
+  const fS1 = v => { const x = r1(v); if (x === 0) return '0.0'; return (x > 0 ? '+' : M) + Math.abs(x).toFixed(1); };
+  const fInt = v => { const x = Math.sign(v) * Math.round(Math.abs(v)); if (x === 0) return '0'; return (x > 0 ? '+' : M) + Math.abs(x); };
+  const fDose = x => String(Number(x.toPrecision(3)));
+  const fIC = x => String(Number(x.toPrecision(2)));
+  const fSh = v => (v > 0 ? '+' : v < 0 ? M : '') + Math.abs(v).toFixed(2);
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+  function scoreStyle(pp) {
+    if (pp == null || Math.abs(pp) < 0.5) return 'background:var(--mid)';
+    const a = Math.min(Math.abs(pp) / 30, 1);
+    const pct = Math.round(14 + a * 56);
+    return 'background:var(--mid);background:color-mix(in oklab, var(' + (pp > 0 ? '--syn' : '--ant') + ') ' + pct + '%, var(--mid))';
+  }
+  function obsStyle(o) {
+    const pct = Math.round(clamp(o, 0, 100) * 0.26);
+    return 'background:var(--surface-2);background:color-mix(in oklab, var(--ink) ' + pct + '%, var(--surface-2))';
+  }
+
+  /* ---------- pharmacology ---------- */
+  // p = { l: log10 IC50 (µM), h: Hill slope, em: max effect % }
+  function hillP(p, x) { if (x <= 0) return 0; const t = Math.pow(x / Math.pow(10, p.l), p.h); return p.em / 100 * t / (1 + t); }
+  function invHill(p, y) { const f = y / (p.em / 100); if (!(f > 0) || f >= 1) return null; return Math.pow(10, p.l) * Math.pow(f / (1 - f), 1 / p.h); }
+  // Loewe expected effect for doses dA, dB: solve dA/D_A(y) + dB/D_B(y) = 1. Returns null when no solution exists.
+  function loeweExpected(dA, dB, A, B) {
+    const ymax = Math.min(A.em, B.em) / 100;
+    const f = y => dA / invHill(A, y) + dB / invHill(B, y) - 1;
+    let lo = 1e-12, hi = ymax * (1 - 1e-9);
+    if (f(hi) > 0) return null;
+    for (let k = 0; k < 80; k++) { const mid = (lo + hi) / 2; if (f(mid) > 0) lo = mid; else hi = mid; }
+    return (lo + hi) / 2;
+  }
+  // ZIP curve: drug on top of a fixed partner effect y0, rising to 100%
+  function zipCurve(y0, lm, lam, x) { if (x <= 0) return y0; const t = Math.pow(x / Math.pow(10, lm), lam); return (y0 + t) / (1 + t); }
+  function fitZip(xs, ys, y0) {
+    const sse = (lm, lam) => { let s = 0; for (let k = 0; k < xs.length; k++) { const r = zipCurve(y0, lm, lam, xs[k]) - ys[k]; s += r * r; } return s; };
+    let best = { lm: 0, lam: 1, e: Infinity };
+    for (let i = 0; i <= 60; i++) { const lm = -3 + i * 0.1; for (let j = 0; j <= 29; j++) { const lam = 0.2 + j * 0.2; const e = sse(lm, lam); if (e < best.e) best = { lm, lam, e }; } }
+    [[0.01, 0.02], [0.001, 0.002]].forEach(([sm, sl]) => {
+      const c = best;
+      for (let i = -10; i <= 10; i++) for (let j = -10; j <= 10; j++) {
+        const lm = c.lm + i * sm, lam = Math.max(0.05, c.lam + j * sl); const e = sse(lm, lam);
+        if (e < best.e) best = { lm, lam, e };
+      }
+    });
+    return best;
+  }
+  // seeded noise
+  function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  function normals(seed, n) { const r = mulberry32(seed * 9973 + 17); const out = []; while (out.length < n) { const u = Math.max(r(), 1e-12), v = r(); const R = Math.sqrt(-2 * Math.log(u)); out.push(R * Math.cos(2 * Math.PI * v), R * Math.sin(2 * Math.PI * v)); } return out.slice(0, n); }
+
+  /* ---------- chart helpers ---------- */
+  const lgs = (d0, d1, r0, rr) => { const a = Math.log10(d0), b = Math.log10(d1); return v => r0 + (Math.log10(v) - a) / (b - a) * (rr - r0); };
+  const lin = (d0, d1, r0, rr) => v => r0 + (v - d0) / (d1 - d0) * (rr - r0);
+  function logspace(d0, d1, n) { const a = Math.log10(d0), b = Math.log10(d1), out = []; for (let k = 0; k <= n; k++) out.push(Math.pow(10, a + (b - a) * k / n)); return out; }
+  const path = (xs, fx, fy) => xs.map((v, k) => (k ? 'L' : 'M') + fx(v).toFixed(1) + ',' + fy(v).toFixed(1)).join('');
+  const XT = [0.1, 0.3, 1, 3, 10];
+  function frame(W, H, m, x, y, yt, ylab, xlab, fmtY, xt, fmtX) {
+    let s = '';
+    yt.forEach(v => {
+      const yy = y(v).toFixed(1);
+      s += '<line class="grid" x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + yy + '" y2="' + yy + '"/>';
+      s += '<text class="tick" x="' + (m.l - 7) + '" y="' + (y(v) + 3.5).toFixed(1) + '" text-anchor="end">' + (fmtY ? fmtY(v) : v) + '</text>';
+    });
+    (xt || XT).forEach(v => {
+      const xx = x(v).toFixed(1);
+      s += '<line class="xt" x1="' + xx + '" x2="' + xx + '" y1="' + (H - m.b) + '" y2="' + (H - m.b + 4) + '"/>';
+      s += '<text class="tick" x="' + xx + '" y="' + (H - m.b + 16) + '" text-anchor="middle">' + (fmtX ? fmtX(v) : v) + '</text>';
+    });
+    s += '<text class="axlab" x="' + (W - m.r) + '" y="' + (H - 3) + '" text-anchor="end">' + xlab + '</text>';
+    s += '<text class="axlab" transform="translate(11 ' + ((m.t + H - m.b) / 2).toFixed(1) + ') rotate(-90)" text-anchor="middle">' + ylab + '</text>';
+    return s;
+  }
+  const svgOpen = (W, H, label) => '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + label + '">';
+  const axisLine = (W, m, y0) => '<line class="axis" x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + y0.toFixed(1) + '" y2="' + y0.toFixed(1) + '"/>';
+  function bracket(xx, ya, yb, v) {
+    if (Math.abs(ya - yb) < 1) return '';
+    return '<line class="' + (v > 0 ? 'br-syn' : 'br-ant') + '" x1="' + xx.toFixed(1) + '" x2="' + xx.toFixed(1) + '" y1="' + ya.toFixed(1) + '" y2="' + yb.toFixed(1) + '"/>';
+  }
+  function spread(labels, gap, lo, hi) {
+    labels.sort((a, b) => a.y - b.y);
+    for (let i = 1; i < labels.length; i++) if (labels[i].y - labels[i - 1].y < gap) labels[i].y = labels[i - 1].y + gap;
+    for (let i = labels.length - 1; i >= 0; i--) { const lim = i === labels.length - 1 ? hi : labels[i + 1].y - gap; if (labels[i].y > lim) labels[i].y = lim; }
+    labels.forEach(l => { if (l.y < lo) l.y = lo; });
+    return labels;
+  }
+  function niceStep(max, target) { const raw = max / target; const p = Math.pow(10, Math.floor(Math.log10(raw))); const n = raw / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p; }
+  const fNum = v => String(Number(v.toPrecision(3)));
+
+  /* =================== 1 · Score a grid =================== */
+  const P1 = {
+    chat:     { a: [20, 50], b: [30, 60], c: [[45, 65], [70, 80]] },
+    additive: { a: [20, 50], b: [30, 60], c: [[44, 68], [65, 80]] },
+    maxeff:   { a: [30, 40], b: [20, 90], c: [[45, 93], [55, 95]] },
+    inactive: { a: [20, 50], b: [0, 0],   c: [[35, 40], [70, 75]] }
+  };
+  const D1 = ['10 nM', '100 nM'];
+  const s1 = { a: [20, 50], b: [30, 60], c: [[45, 65], [70, 80]], sel: [0, 0], preset: 'chat' };
+  function c1(i, j) {
+    const a = s1.a[i], b = s1.b[j], o = s1.c[i][j];
+    const hE = Math.max(a, b), bE = a + b - a * b / 100;
+    return { a, b, o, hE, bE, hS: r1(o) - r1(hE), bS: r1(o) - r1(bE), win: a > b ? 'A' : (b > a ? 'B' : '=') };
+  }
+  function build1() {
+    const t = $('#entry');
+    const num = (id, cls, k, i, j, label) => '<input id="' + id + '" class="cell ' + cls + '" data-k="' + k + '" data-i="' + i + '" data-j="' + j + '" type="number" inputmode="decimal" min="0" max="100" step="1" aria-label="' + label + '">';
+    let h = '<thead><tr><th scope="col"><span class="vh">Drug A dose</span></th><th scope="col">B 0</th>';
+    D1.forEach(d => { h += '<th scope="col">B ' + d + '</th>'; });
+    h += '</tr></thead><tbody><tr><th scope="row">A 0</th><td class="zero">0</td>';
+    D1.forEach((d, j) => { h += '<td>' + num('in-b' + j, 'cell-b', 'b', -1, j, 'Drug B ' + d + ' alone, % inhibition') + '</td>'; });
+    h += '</tr>';
+    D1.forEach((da, i) => {
+      h += '<tr><th scope="row">A ' + da + '</th><td>' + num('in-a' + i, 'cell-a', 'a', i, -1, 'Drug A ' + da + ' alone, % inhibition') + '</td>';
+      D1.forEach((db, j) => { h += '<td>' + num('in-c' + i + j, 'cell-c', 'c', i, j, 'A ' + da + ' plus B ' + db + ', % inhibition') + '</td>'; });
+      h += '</tr>';
+    });
+    t.innerHTML = h + '</tbody>';
+    t.addEventListener('input', e => {
+      const el = e.target; if (!el.classList.contains('cell')) return;
+      const v = clamp(parseFloat(el.value) || 0, 0, 100);
+      const k = el.dataset.k, i = +el.dataset.i, j = +el.dataset.j;
+      if (k === 'a') s1.a[i] = v; else if (k === 'b') s1.b[j] = v; else { s1.c[i][j] = v; s1.sel = [i, j]; }
+      s1.preset = null; render1();
+    });
+    t.addEventListener('change', e => { const el = e.target; if (!el.classList.contains('cell')) return; el.value = fE(clamp(parseFloat(el.value) || 0, 0, 100)); });
+    t.addEventListener('focusin', e => { const el = e.target; if (!el.classList.contains('cell-c')) return; s1.sel = [+el.dataset.i, +el.dataset.j]; render1(); });
+    $$('#presets .chip').forEach(b => b.addEventListener('click', () => load1(b.dataset.preset)));
+    $('#scores1').addEventListener('click', e => {
+      const b = e.target.closest('.well'); if (!b) return;
+      s1.sel = [+b.dataset.i, +b.dataset.j]; render1();
+      const nb = $('#scores1 .well[data-i="' + s1.sel[0] + '"][data-j="' + s1.sel[1] + '"]'); if (nb) nb.focus();
+    });
+  }
+  function load1(k) { const p = P1[k]; s1.a = p.a.slice(); s1.b = p.b.slice(); s1.c = p.c.map(r => r.slice()); s1.preset = k; sync1(); render1(); }
+  function sync1() {
+    s1.a.forEach((v, n) => { $('#in-a' + n).value = v; });
+    s1.b.forEach((v, n) => { $('#in-b' + n).value = v; });
+    s1.c.forEach((r, i) => r.forEach((v, j) => { $('#in-c' + i + j).value = v; }));
+  }
+  function render1() {
+    $$('#presets .chip').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.preset === s1.preset)));
+    $$('#entry .cell-c').forEach(el => el.classList.toggle('sel', +el.dataset.i === s1.sel[0] && +el.dataset.j === s1.sel[1]));
+    let h = '<thead><tr><th scope="col"><span class="vh">Drug A dose</span></th>';
+    D1.forEach(d => { h += '<th scope="col">B ' + d + '</th>'; });
+    h += '</tr></thead><tbody>';
+    let sh = 0, sb = 0;
+    D1.forEach((da, i) => {
+      h += '<tr><th scope="row">A ' + da + '</th>';
+      D1.forEach((db, j) => {
+        const r = c1(i, j); sh += r.hS; sb += r.bS;
+        const on = s1.sel[0] === i && s1.sel[1] === j;
+        h += '<td><button type="button" class="well' + (on ? ' sel' : '') + '" data-i="' + i + '" data-j="' + j + '" aria-pressed="' + on + '" aria-label="A ' + da + ' plus B ' + db + ': HSA ' + fS(r.hS) + ', Bliss ' + fS(r.bS) + ' percentage points">' +
+          '<span class="sc" style="' + scoreStyle(r.hS) + '"><i>HSA</i><b>' + fS(r.hS) + '</b></span>' +
+          '<span class="sc" style="' + scoreStyle(r.bS) + '"><i>Bliss</i><b>' + fS(r.bS) + '</b></span></button></td>';
+      });
+      h += '</tr>';
+    });
+    $('#scores1').innerHTML = h + '</tbody>';
+    $('#means1').innerHTML = '<span>Mean of the 4 combination wells</span><b>HSA ' + fS(sh / 4) + '</b><b>Bliss ' + fS(sb / 4) + '</b>';
+    const i = s1.sel[0], j = s1.sel[1], r = c1(i, j);
+    const win = r.win === '=' ? 'Both drugs alone give the same effect here' : 'Drug ' + r.win + ' is the stronger single drug in this well';
+    const bar = (cls, label, v, tick) => '<div class="bar ' + cls + '"><span>' + label + '</span><div class="track"><div class="fill" style="width:' + clamp(v, 0, 100) + '%"></div>' +
+      (tick != null ? '<div class="tick" style="left:' + clamp(tick, 0, 100) + '%"></div>' : '') + '</div><span class="val">' + fE(v) + '</span></div>';
+    $('#detail1').innerHTML =
+      '<div class="hd"><h3>A ' + D1[i] + ' + B ' + D1[j] + '</h3><span class="muted">A alone ' + fE(r.a) + ' · B alone ' + fE(r.b) + ' · combination ' + fE(r.o) + '</span></div>' +
+      '<div class="calc">' +
+        '<div class="row"><span class="tag">HSA</span><code>expected = max(' + fE(r.a) + ', ' + fE(r.b) + ') = ' + fE(r.hE) + '<br>score = ' + fE(r.o) + ' ' + M + ' ' + fE(r.hE) + ' = <b>' + fS(r.hS) + ' pp</b></code><span class="why">' + win + ', so it sets the bar. The other drug is ignored.</span></div>' +
+        '<div class="row"><span class="tag">Bliss</span><code>expected = ' + fE(r.a) + ' + ' + fE(r.b) + ' ' + M + ' (' + fE(r.a) + ' × ' + fE(r.b) + ')/100 = ' + fE(r.bE) + '<br>score = ' + fE(r.o) + ' ' + M + ' ' + fE(r.bE) + ' = <b>' + fS(r.bS) + ' pp</b></code><span class="why">The overlap term removes cells that both drugs would have killed.</span></div>' +
+      '</div>' +
+      '<div class="bars" aria-hidden="true">' + bar('obs', 'Observed', r.o) + bar('', 'HSA expected', r.hE, r.o) + bar('', 'Bliss expected', r.bE, r.o) + '</div>' +
+      '<p class="note" style="margin:0">The black tick marks the observed value. Its distance from the end of each grey bar is that model\'s score.</p>';
+  }
+
+  /* =================== 2 · Sham test =================== */
+  const s2 = { shape: 'hill', h: 1, ld: 0 };
+  function E2(x) { if (s2.shape === 'hill') { const t = Math.pow(x, s2.h); return t / (1 + t); } return 1 - Math.pow(2, -x); }
+  function sham(x) { const e = E2(x), o = E2(2 * x), bl = 2 * e - e * e; return { e, o, bl, hS: (o - e) * 100, bS: (o - bl) * 100 }; }
+  function read2() {
+    const d = Math.pow(10, s2.ld), r = sham(d);
+    const E = r1(r.e * 100), O = r1(r.o * 100), BL = r1(r.bl * 100);
+    const hS = O - E, bS = O - BL;
+    $('#read2').innerHTML =
+      '<div class="dosebar"><span>d = <b>' + fDose(d) + ' µM</b></span><span>2d = <b>' + fDose(2 * d) + ' µM</b></span></div>' +
+      '<table class="readout" style="margin-top:10px"><thead><tr><th scope="col"><span class="vh">Model</span></th><th scope="col">expects</th><th scope="col">observed</th><th scope="col">score</th></tr></thead><tbody>' +
+      '<tr><th scope="row">HSA</th><td>' + f1(E) + '</td><td>' + f1(O) + '</td><td><span class="pill" style="' + scoreStyle(hS) + '">' + fS1(hS) + '</span></td></tr>' +
+      '<tr><th scope="row">Bliss</th><td>' + f1(BL) + '</td><td>' + f1(O) + '</td><td><span class="pill" style="' + scoreStyle(bS) + '">' + fS1(bS) + '</span></td></tr>' +
+      '<tr><th scope="row">Loewe</th><td>' + f1(O) + '</td><td>' + f1(O) + '</td><td><span class="pill" style="' + scoreStyle(0) + '">0.0</span></td></tr>' +
+      '</tbody></table>' +
+      '<div class="work" style="margin-top:10px">' +
+        '<p><span>E(d)</span><code>' + f1(E) + '</code></p>' +
+        '<p><span>HSA</span><code>max(' + f1(E) + ', ' + f1(E) + ') = ' + f1(E) + '</code></p>' +
+        '<p><span>Bliss</span><code>' + f1(E) + ' + ' + f1(E) + ' ' + M + ' (' + f1(E) + ' × ' + f1(E) + ')/100 = ' + f1(BL) + '</code></p>' +
+        '<p><span>Loewe</span><code>d/D + d/D = 1 → D = 2d → E(2d) = ' + f1(O) + '</code></p>' +
+        '<p><span>Observed</span><code>A alone at 2d = ' + f1(O) + '</code></p>' +
+      '</div>';
+  }
+  function draw2a() {
+    const el = $('#c2a'), W = el.clientWidth; if (!W) return;
+    const H = 250, m = { l: 48, r: 18, t: 24, b: 36 };
+    const x = lgs(0.05, 20, m.l, W - m.r), y = lin(0, 100, H - m.b, m.t);
+    const d = Math.pow(10, s2.ld), d2 = 2 * d, r = sham(d);
+    let s = svgOpen(W, H, 'Drug A dose-response with the sham comparison at d = ' + fDose(d) + ' micromolar');
+    s += frame(W, H, m, x, y, [0, 25, 50, 75, 100], '% inhibition', 'dose, µM (log scale)');
+    s += axisLine(W, m, y(0));
+    [[d, 'd'], [d2, '2d']].forEach(g => {
+      const gx = x(g[0]).toFixed(1);
+      s += '<line class="guide" x1="' + gx + '" x2="' + gx + '" y1="' + y(0).toFixed(1) + '" y2="' + (m.t - 6) + '"/>';
+      s += '<text class="glab" x="' + gx + '" y="' + (m.t - 10) + '" text-anchor="middle">' + g[1] + '</text>';
+    });
+    s += '<path class="curve-a" d="' + path(logspace(0.05, 20, 180), x, v => y(E2(v) * 100)) + '"/>';
+    const X1 = x(d), X2 = x(d2), YE = y(r.e * 100), YO = y(r.o * 100), YB = y(r.bl * 100);
+    s += '<line class="hsa-line" x1="' + X1.toFixed(1) + '" x2="' + X2.toFixed(1) + '" y1="' + YE.toFixed(1) + '" y2="' + YE.toFixed(1) + '"/>';
+    s += bracket(X2 - 11, YE, YO, r.hS) + bracket(X2 + 11, YB, YO, r.bS);
+    s += '<circle class="dot-a" cx="' + X1.toFixed(1) + '" cy="' + YE.toFixed(1) + '" r="5.5"><title>A alone at d: ' + f1(r.e * 100) + '%</title></circle>';
+    s += '<path class="exp-hsa" d="M' + X2.toFixed(1) + ' ' + (YE - 6).toFixed(1) + 'L' + (X2 + 6).toFixed(1) + ' ' + YE.toFixed(1) + 'L' + X2.toFixed(1) + ' ' + (YE + 6).toFixed(1) + 'L' + (X2 - 6).toFixed(1) + ' ' + YE.toFixed(1) + 'Z"><title>HSA expects ' + f1(r.e * 100) + '%</title></path>';
+    s += '<circle class="exp-bliss" cx="' + X2.toFixed(1) + '" cy="' + YB.toFixed(1) + '" r="5.5"><title>Bliss expects ' + f1(r.bl * 100) + '%</title></circle>';
+    s += '<circle class="dot-a" cx="' + X2.toFixed(1) + '" cy="' + YO.toFixed(1) + '" r="5.5"><title>Observed, A alone at 2d: ' + f1(r.o * 100) + '% (Loewe expects the same)</title></circle>';
+    el.innerHTML = s + '</svg>';
+  }
+  function flips(pts, key) {
+    const out = []; let prev = null;
+    pts.forEach(p => {
+      const v = p[key]; if (Math.abs(v) < 0.05) return;
+      if (prev && Math.sign(prev[key]) !== Math.sign(v)) { const l0 = Math.log10(prev.d), l1 = Math.log10(p.d), t = prev[key] / (prev[key] - v); out.push(Math.pow(10, l0 + t * (l1 - l0))); }
+      prev = p;
+    });
+    return out;
+  }
+  function draw2b() {
+    const el = $('#c2b'), W = el.clientWidth;
+    const pts = logspace(0.05, 10, 220).map(d => { const r = sham(d); return { d, h: r.hS, b: r.bS }; });
+    const fl = flips(pts, 'b');
+    let maxAbsB = 0, allNeg = true, allPos = true;
+    pts.forEach(p => { maxAbsB = Math.max(maxAbsB, Math.abs(p.b)); if (p.b > 0.05) allNeg = false; if (p.b < -0.05) allPos = false; });
+    let note = '';
+    if (maxAbsB < 0.05) note = 'Bliss reads 0 at every dose for this curve, matching Loewe. HSA stays positive because E(2d) is always at least E(d).';
+    else if (fl.length) note = 'Bliss changes sign at d ≈ ' + fl.map(f => fDose(f) + ' µM').join(' and ') + '. Loewe stays at 0 and HSA never goes negative.';
+    else if (allNeg) note = 'Bliss stays negative from 0.05 to 10 µM: the drug looks antagonistic with itself at every dose. Loewe stays at 0 and HSA never goes negative.';
+    else if (allPos) note = 'Bliss stays positive from 0.05 to 10 µM: the drug looks synergistic with itself at every dose. Loewe stays at 0.';
+    $('#flip2').textContent = note;
+    if (!W) return;
+    const H = 230, m = { l: 48, r: 18, t: 14, b: 36 };
+    let mn = 0, mx = 0;
+    pts.forEach(p => { mn = Math.min(mn, p.h, p.b); mx = Math.max(mx, p.h, p.b); });
+    const st = (mx - mn) > 60 ? 20 : 10;
+    const y0 = Math.min(-st, Math.floor(mn / st) * st), y1 = Math.max(st, Math.ceil(mx / st) * st);
+    const x = lgs(0.05, 10, m.l, W - m.r), y = lin(y0, y1, H - m.b, m.t);
+    const yt = []; for (let v = y0; v <= y1 + 1e-9; v += st) yt.push(v);
+    let s = svgOpen(W, H, 'Sham score in percentage points across doses, for HSA, Bliss and Loewe');
+    const pw = W - m.r - m.l;
+    s += '<rect class="band-syn" x="' + m.l + '" y="' + m.t + '" width="' + pw + '" height="' + (y(0) - m.t).toFixed(1) + '"/>';
+    s += '<rect class="band-ant" x="' + m.l + '" y="' + y(0).toFixed(1) + '" width="' + pw + '" height="' + (H - m.b - y(0)).toFixed(1) + '"/>';
+    s += frame(W, H, m, x, y, yt, 'score, pp', 'dose d of each copy, µM (log scale)', v => v === 0 ? '0' : (v > 0 ? '+' + v : M + Math.abs(v)));
+    s += '<text class="band-lab" x="' + (m.l + 8) + '" y="' + (m.t + 13) + '">synergy</text>';
+    s += '<text class="band-lab" x="' + (m.l + 8) + '" y="' + (H - m.b - 7) + '">antagonism</text>';
+    s += '<line class="zero" x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + y(0).toFixed(1) + '" y2="' + y(0).toFixed(1) + '"/>';
+    s += '<line class="loewe-line" x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + y(0).toFixed(1) + '" y2="' + y(0).toFixed(1) + '"/>';
+    s += '<path class="hsa-line" d="' + pts.map((p, k) => (k ? 'L' : 'M') + x(p.d).toFixed(1) + ',' + y(p.h).toFixed(1)).join('') + '"/>';
+    s += '<path class="bliss-line" d="' + pts.map((p, k) => (k ? 'L' : 'M') + x(p.d).toFixed(1) + ',' + y(p.b).toFixed(1)).join('') + '"/>';
+    fl.forEach(f => { const fx = x(f).toFixed(1); s += '<line class="flip" x1="' + fx + '" x2="' + fx + '" y1="' + (y(0) - 7).toFixed(1) + '" y2="' + (y(0) + 7).toFixed(1) + '"><title>Bliss changes sign at ' + fDose(f) + ' µM</title></line>'; });
+    const d = Math.pow(10, s2.ld), r = sham(d), cx = x(d).toFixed(1);
+    s += '<line class="guide" x1="' + cx + '" x2="' + cx + '" y1="' + m.t + '" y2="' + (H - m.b) + '"/>';
+    s += '<circle class="pt-hsa" cx="' + cx + '" cy="' + y(r.hS).toFixed(1) + '" r="4.5"><title>HSA at d = ' + fDose(d) + ' µM: ' + fS1(r.hS) + ' pp</title></circle>';
+    s += '<circle class="pt-bliss" cx="' + cx + '" cy="' + y(r.bS).toFixed(1) + '" r="4.5"><title>Bliss at d = ' + fDose(d) + ' µM: ' + fS1(r.bS) + ' pp</title></circle>';
+    const last = pts[pts.length - 1];
+    const labs = spread([{ t: 'HSA', y: y(last.h) - 7 }, { t: 'Bliss', y: y(last.b) - 7 }, { t: 'Loewe', y: y(0) - 7 }], 13, m.t + 10, H - m.b - 4);
+    labs.forEach(l => { s += '<text class="lbl" x="' + (W - m.r - 2) + '" y="' + l.y.toFixed(1) + '" text-anchor="end">' + l.t + '</text>'; });
+    el.innerHTML = s + '</svg>';
+  }
+  function render2() {
+    $('#shapehint').innerHTML = s2.shape === 'hill'
+      ? '<code>E(x) = x<sup>h</sup> / (1 + x<sup>h</sup>)</code>, with x in µM.'
+      : '<code>E(x) = 1 ' + M + ' 2<sup>' + M + 'x</sup></code>, also 50% at 1 µM. Each µM kills the same fraction of the cells still alive.';
+    $('#f-h2').classList.toggle('off', s2.shape !== 'hill');
+    $('#h2').disabled = s2.shape !== 'hill';
+    $('#h2o').textContent = s2.h.toFixed(1);
+    $('#d2o').textContent = fDose(Math.pow(10, s2.ld)) + ' µM';
+    read2(); draw2a(); draw2b();
+  }
+  function bind2() {
+    const chk = $('input[name="shape2"]:checked'); if (chk) s2.shape = chk.value;
+    s2.h = +$('#h2').value; s2.ld = +$('#d2').value;
+    $$('input[name="shape2"]').forEach(r => r.addEventListener('change', () => { s2.shape = r.value; render2(); }));
+    $('#h2').addEventListener('input', e => { s2.h = +e.target.value; render2(); });
+    $('#d2').addEventListener('input', e => { s2.ld = +e.target.value; render2(); });
+  }
+
+  /* =================== 3 · Loewe =================== */
+  const DL = [0.05, 0.1, 0.2, 0.3, 0.5, 1, 2, 3, 5, 10];
+  const s3 = { A: { l: 0, h: 1, em: 100 }, B: { l: 0.5, h: 2, em: 100 }, ia: 4, ib: 5, e: 60 };
+  function calc3() {
+    const A = s3.A, B = s3.B, dA = DL[s3.ia], dB = DL[s3.ib], e = s3.e / 100;
+    const DA = invHill(A, e), DB = invHill(B, e);
+    const CI = (DA != null && DB != null) ? dA / DA + dB / DB : null;
+    const LE = loeweExpected(dA, dB, A, B);
+    const EA = hillP(A, dA), EB = hillP(B, dB);
+    return { A, B, dA, dB, e, DA, DB, CI, LE, EA, EB };
+  }
+  function read3() {
+    const c = calc3();
+    const f2 = v => v.toFixed(2);
+    const dline = (k, D, p) => D != null
+      ? 'Drug ' + k + ' alone needs <code>D<sub>' + k + '</sub> = ' + fDose(D) + ' µM</code> to reach ' + s3.e + '%.'
+      : 'Drug ' + k + ' alone never reaches ' + s3.e + '%: its maximum is ' + p.em + '%. <b>D<sub>' + k + '</sub> doesn\'t exist.</b>';
+    let ciLine;
+    if (c.CI == null) ciLine = '<span class="verdict">CI is undefined</span> because one of the doses alone doesn\'t exist.';
+    else {
+      const ci = f2(c.CI);
+      const v = ci === '1.00' ? 'equal to 1: dose-additive' : (c.CI < 1 ? 'below 1: synergy' : 'above 1: antagonism');
+      ciLine = '<code>CI = ' + fDose(c.dA) + '/' + fDose(c.DA) + ' + ' + fDose(c.dB) + '/' + fDose(c.DB) + ' = ' + f2(c.dA / c.DA) + ' + ' + f2(c.dB / c.DB) + ' = ' + ci + '</code> → <span class="verdict">' + v + '</span>';
+    }
+    const O = r1(s3.e);
+    const hE = r1(Math.max(c.EA, c.EB) * 100), bE = r1((c.EA + c.EB - c.EA * c.EB) * 100);
+    const lE = c.LE == null ? null : r1(c.LE * 100);
+    const row = (name, ex, note) => '<tr><th scope="row">' + name + '</th><td>' + (ex == null ? 'n/a' : f1(ex)) + '</td><td>' + f1(O) + '</td><td>' + (ex == null ? '<span class="pill" style="' + scoreStyle(null) + '">n/a</span>' : '<span class="pill" style="' + scoreStyle(O - ex) + '">' + fS1(O - ex) + '</span>') + '</td></tr>';
+    let undefinedNote = '';
+    if (c.LE == null) {
+      const hiK = c.A.em >= c.B.em ? 'A' : 'B', loK = hiK === 'A' ? 'B' : 'A';
+      const hiE = hiK === 'A' ? c.EA : c.EB, loP = loK === 'A' ? c.A : c.B;
+      undefinedNote = '<p class="note">Loewe has no expected value here: drug ' + hiK + ' alone at its dose already gives ' + f1(hiE * 100) + '%, above drug ' + loK + '\'s ' + loP.em + '% ceiling, so it can\'t be written as an equivalent dose of drug ' + loK + '.</p>';
+    }
+    $('#readL').innerHTML =
+      '<h3 style="margin-bottom:12px">Results for A ' + fDose(c.dA) + ' µM + B ' + fDose(c.dB) + ' µM, observed ' + s3.e + '%</h3>' +
+      '<ol class="steps">' +
+        '<li><span class="sn">1</span><span>' + dline('A', c.DA, c.A) + '</span></li>' +
+        '<li><span class="sn">2</span><span>' + dline('B', c.DB, c.B) + '</span></li>' +
+        '<li><span class="sn">3</span><span>' + ciLine + '</span></li>' +
+      '</ol>' +
+      '<p class="note">Combination index (CI) form: what fraction of each solo dose you used. Matrix tools also turn Loewe into an expected effect: the effect these two doses would give if the drugs were dose-additive. That puts it on the same pp scale as HSA and Bliss.</p>' +
+      '<div class="tw" style="margin-top:12px"><table class="readout"><thead><tr><th scope="col">Model</th><th scope="col">expects (%)</th><th scope="col">observed (%)</th><th scope="col">score (pp)</th></tr></thead><tbody>' +
+        row('Loewe', lE) + row('Bliss', bE) + row('HSA', hE) +
+      '</tbody></table></div>' + undefinedNote;
+  }
+  function drawL1() {
+    const el = $('#cL1'), W = el.clientWidth; if (!W) return;
+    const c = calc3();
+    const H = 250, m = { l: 48, r: 18, t: 16, b: 36 };
+    const x = lgs(0.03, 100, m.l, W - m.r), y = lin(0, 100, H - m.b, m.t);
+    let s = svgOpen(W, H, 'Dose-response curves of drugs A and B read backwards at the observed effect');
+    s += frame(W, H, m, x, y, [0, 25, 50, 75, 100], '% inhibition', 'dose, µM (log scale)', null, [0.1, 1, 10, 100]);
+    s += axisLine(W, m, y(0));
+    s += '<line class="plat-a" x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + y(c.A.em).toFixed(1) + '" y2="' + y(c.A.em).toFixed(1) + '"/>';
+    s += '<line class="plat-b" x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + y(c.B.em).toFixed(1) + '" y2="' + y(c.B.em).toFixed(1) + '"/>';
+    const xs = logspace(0.03, 100, 200);
+    s += '<path class="curve-b" d="' + path(xs, x, v => y(hillP(c.B, v) * 100)) + '"/>';
+    s += '<path class="curve-a" d="' + path(xs, x, v => y(hillP(c.A, v) * 100)) + '"/>';
+    const YE = y(s3.e);
+    s += '<line class="level" x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + YE.toFixed(1) + '" y2="' + YE.toFixed(1) + '"/>';
+    s += '<text class="lbl-sm" x="' + (m.l + 4) + '" y="' + (YE - 6).toFixed(1) + '">observed ' + s3.e + '%</text>';
+    const labs = [];
+    [['A', c.DA, 'a'], ['B', c.DB, 'b']].forEach(([k, D, cl]) => {
+      if (D == null) return;
+      if (D > 100) { labs.push({ t: 'D' + k + ' > 100 µM', x: W - m.r - 2, y: YE + 16, anchor: 'end' }); return; }
+      const X = x(Math.max(D, 0.03));
+      s += '<line class="drop-' + cl + '" x1="' + X.toFixed(1) + '" x2="' + X.toFixed(1) + '" y1="' + YE.toFixed(1) + '" y2="' + y(0).toFixed(1) + '"/>';
+      s += '<circle class="ring-' + cl + '" cx="' + X.toFixed(1) + '" cy="' + YE.toFixed(1) + '" r="5.5"><title>Drug ' + k + ' alone reaches ' + s3.e + '% at ' + fDose(D) + ' µM</title></circle>';
+      labs.push({ t: 'D' + k, x: X + 5, y: y(0) - 8, anchor: 'start' });
+    });
+    if (labs.length === 2 && labs[0].anchor === 'start' && labs[1].anchor === 'start' && Math.abs(labs[0].x - labs[1].x) < 26) labs[1].y -= 14;
+    labs.forEach(l => {
+      const t = l.t.replace(/^D([AB])/, 'D<tspan baseline-shift="sub" font-size="9">$1</tspan>');
+      s += '<text class="lbl" x="' + l.x.toFixed(1) + '" y="' + l.y.toFixed(1) + '" text-anchor="' + l.anchor + '">' + t + '</text>';
+    });
+    [['a', c.dA, 'A'], ['b', c.dB, 'B']].forEach(([cl, d, k], n) => {
+      const X = x(d), Y = y(0);
+      s += '<path class="dot-' + cl + '" d="M' + X.toFixed(1) + ' ' + (Y - 9).toFixed(1) + 'L' + (X + 6).toFixed(1) + ' ' + (Y + 1).toFixed(1) + 'L' + (X - 6).toFixed(1) + ' ' + (Y + 1).toFixed(1) + 'Z"><title>Dose of ' + k + ' in the well: ' + fDose(d) + ' µM</title></path>';
+    });
+    el.innerHTML = s + '</svg>';
+  }
+  function drawL2() {
+    const el = $('#cL2'), W = el.clientWidth; if (!W) return;
+    const c = calc3();
+    const H = 270, m = { l: 54, r: 18, t: 16, b: 40 };
+    let s = svgOpen(W, H, 'Isobologram for the observed effect');
+    if (c.DA == null || c.DB == null) {
+      const k = c.DA == null ? 'A' : 'B';
+      s += '<rect x="' + m.l + '" y="' + m.t + '" width="' + (W - m.l - m.r) + '" height="' + (H - m.t - m.b) + '" rx="8" fill="none" stroke="var(--line)" stroke-dasharray="4 4" style="stroke:var(--line)"/>';
+      s += '<text class="msg" x="' + (W / 2).toFixed(1) + '" y="' + (H / 2 - 6).toFixed(1) + '" text-anchor="middle">No isobole: drug ' + k + ' alone never reaches ' + s3.e + '%.</text>';
+      s += '<text class="band-lab" x="' + (W / 2).toFixed(1) + '" y="' + (H / 2 + 14).toFixed(1) + '" text-anchor="middle">The line has no end on the ' + k + ' axis, so Loewe can\'t place this well.</text>';
+      el.innerHTML = s + '</svg>'; return;
+    }
+    const xmaxR = 1.15 * Math.max(c.DA, c.dA), ymaxR = 1.15 * Math.max(c.DB, c.dB);
+    const xs = niceStep(xmaxR, 4), ys = niceStep(ymaxR, 4);
+    const xmax = Math.ceil(xmaxR / xs) * xs, ymax = Math.ceil(ymaxR / ys) * ys;
+    const x = lin(0, xmax, m.l, W - m.r), y = lin(0, ymax, H - m.b, m.t);
+    const xt = [], yt = [];
+    for (let v = 0; v <= xmax + 1e-9; v += xs) xt.push(v);
+    for (let v = 0; v <= ymax + 1e-9; v += ys) yt.push(v);
+    const P = (a, b) => x(a).toFixed(1) + ',' + y(b).toFixed(1);
+    s += '<polygon class="band-ant" points="' + [P(0, c.DB), P(c.DA, 0), P(xmax, 0), P(xmax, ymax), P(0, ymax)].join(' ') + '"/>';
+    s += '<polygon class="band-syn" points="' + [P(0, 0), P(c.DA, 0), P(0, c.DB)].join(' ') + '"/>';
+    s += frame(W, H, m, x, y, yt, 'dose of B, µM', 'dose of A, µM', fNum, xt, fNum);
+    s += '<line class="axis" x1="' + m.l + '" x2="' + m.l + '" y1="' + m.t + '" y2="' + (H - m.b) + '"/>' + axisLine(W, m, y(0));
+    s += '<line class="iso" x1="' + x(c.DA).toFixed(1) + '" y1="' + y(0).toFixed(1) + '" x2="' + x(0).toFixed(1) + '" y2="' + y(c.DB).toFixed(1) + '"/>';
+    s += '<text class="lbl" x="' + (x(c.DA) - 4).toFixed(1) + '" y="' + (y(0) - 8).toFixed(1) + '" text-anchor="end">D<tspan baseline-shift="sub" font-size="9">A</tspan></text>';
+    s += '<text class="lbl" x="' + (x(0) + 6).toFixed(1) + '" y="' + (y(c.DB) - 6).toFixed(1) + '">D<tspan baseline-shift="sub" font-size="9">B</tspan></text>';
+    s += '<text class="band-lab" x="' + (W - m.r - 8) + '" y="' + (m.t + 14) + '" text-anchor="end">antagonism</text>';
+    const sx = x(c.DA * 0.22), sy = y(c.DB * 0.22);
+    s += '<text class="band-lab" x="' + sx.toFixed(1) + '" y="' + sy.toFixed(1) + '" text-anchor="middle">synergy</text>';
+    const PX = x(c.dA), PY = y(c.dB);
+    s += '<line class="guide" x1="' + PX.toFixed(1) + '" x2="' + PX.toFixed(1) + '" y1="' + PY.toFixed(1) + '" y2="' + y(0).toFixed(1) + '"/>';
+    s += '<line class="guide" x1="' + x(0).toFixed(1) + '" x2="' + PX.toFixed(1) + '" y1="' + PY.toFixed(1) + '" y2="' + PY.toFixed(1) + '"/>';
+    s += '<circle class="dot-ink" cx="' + PX.toFixed(1) + '" cy="' + PY.toFixed(1) + '" r="6"><title>This well: A ' + fDose(c.dA) + ' µM + B ' + fDose(c.dB) + ' µM</title></circle>';
+    const lab = 'this well · CI ' + c.CI.toFixed(2);
+    const right = PX < W - m.r - 120;
+    s += '<text class="lbl" x="' + (right ? PX + 10 : PX - 10).toFixed(1) + '" y="' + (PY - 9).toFixed(1) + '" text-anchor="' + (right ? 'start' : 'end') + '">' + lab + '</text>';
+    el.innerHTML = s + '</svg>';
+  }
+  function render3() {
+    [['la', s3.A], ['lb', s3.B]].forEach(([k, p]) => {
+      $('#' + k + '-ico').textContent = fIC(Math.pow(10, p.l)) + ' µM';
+      $('#' + k + '-ho').textContent = p.h.toFixed(1);
+      $('#' + k + '-emo').textContent = p.em + '%';
+    });
+    $('#l-dao').textContent = fDose(DL[s3.ia]) + ' µM';
+    $('#l-dbo').textContent = fDose(DL[s3.ib]) + ' µM';
+    $('#l-eo').textContent = s3.e + '%';
+    read3(); drawL1(); drawL2();
+  }
+  function bind3() {
+    s3.ia = +$('#l-da').value; s3.ib = +$('#l-db').value; s3.e = +$('#l-e').value;
+    $('#l-da').addEventListener('input', e => { s3.ia = +e.target.value; render3(); });
+    $('#l-db').addEventListener('input', e => { s3.ib = +e.target.value; render3(); });
+    $('#l-e').addEventListener('input', e => { s3.e = +e.target.value; render3(); });
+    [['la', 'A'], ['lb', 'B']].forEach(([k, K]) => {
+      s3[K].l = +$('#' + k + '-ic').value; s3[K].h = +$('#' + k + '-h').value; s3[K].em = +$('#' + k + '-em').value;
+      $('#' + k + '-ic').addEventListener('input', e => { s3[K].l = +e.target.value; render3(); });
+      $('#' + k + '-h').addEventListener('input', e => { s3[K].h = +e.target.value; render3(); });
+      $('#' + k + '-em').addEventListener('input', e => { s3[K].em = +e.target.value; render3(); });
+    });
+  }
+
+  /* =================== 4 · ZIP =================== */
+  const DOSES = [0.1, 0.3, 1, 3, 10];
+  const ZA = { l: 0, h: 1, em: 100 }, ZB = { l: 0.5, h: 2, em: 100 };
+  const s4 = { s: 0.6, j: 3, noise: 0, seed: 11 };
+  function calc4() {
+    const db = DOSES[s4.j], y2 = hillP(ZB, db);
+    const A2 = { l: ZA.l - s4.s * y2, h: ZA.h, em: 100 };
+    const nz = normals(s4.seed, 5);
+    const pts = DOSES.map((da, k) => { const t = y2 + (1 - y2) * hillP(A2, da); return { x: da, t, o: clamp(t + nz[k] * s4.noise / 100, 0, 1) }; });
+    const fit = fitZip(DOSES, pts.map(p => p.o), y2);
+    pts.forEach(p => { p.z = y2 + (1 - y2) * hillP(ZA, p.x); p.f = zipCurve(y2, fit.lm, fit.lam, p.x); p.d = (p.f - p.z) * 100; p.b = (p.o - p.z) * 100; });
+    return { db, y2, A2, pts, fit };
+  }
+  function render4() {
+    $('#z-so').textContent = fSh(s4.s);
+    $('#z-no').textContent = (s4.noise % 1 ? s4.noise.toFixed(1) : s4.noise) + ' pp';
+    $('#z-redraw').disabled = s4.noise === 0;
+    const c = calc4();
+    $('#zTitle').textContent = 'Drug A with B held at ' + fDose(c.db) + ' µM';
+    const md = c.pts.reduce((a, p) => a + p.d, 0) / 5, mb = c.pts.reduce((a, p) => a + p.b, 0) / 5;
+    const ic = Math.pow(10, c.fit.lm);
+    let verdict;
+    if (Math.abs(md) < 0.5) verdict = 'The fitted curve matches ZIP\'s expectation: no potency change, δ ≈ 0.';
+    else if (md > 0) verdict = 'The fitted curve sits left of ZIP\'s expectation: with B present, A is more potent, so δ > 0.';
+    else verdict = 'The fitted curve sits right of ZIP\'s expectation: with B present, A is less potent, so δ < 0.';
+    $('#readZ').innerHTML =
+      '<li>B alone at ' + fDose(c.db) + ' µM: <b>' + f1(c.y2 * 100) + '%</b></li>' +
+      '<li>A alone: IC50 <b>1 µM</b>, slope <b>1.0</b></li>' +
+      '<li>Fitted with B present: IC50 <b>' + (ic > 999 ? '> 999' : fIC(ic)) + ' µM</b>, slope <b>' + c.fit.lam.toFixed(1) + '</b></li>' +
+      '<li>Mean δ <b>' + fS1(md) + ' pp</b> · mean raw Bliss <b>' + fS1(mb) + ' pp</b></li>' +
+      '<li>' + verdict + '</li>';
+    let h = '<thead><tr><th scope="col">A (µM)</th><th scope="col">measured</th><th scope="col">ZIP expects</th><th scope="col">fitted</th><th scope="col">δ (pp)</th><th scope="col">raw Bliss (pp)</th></tr></thead><tbody>';
+    c.pts.forEach(p => {
+      h += '<tr><th scope="row">' + p.x + '</th><td>' + f1(p.o * 100) + '</td><td>' + f1(p.z * 100) + '</td><td>' + f1(p.f * 100) + '</td>' +
+        '<td><span class="pill" style="' + scoreStyle(p.d) + '">' + fS1(p.d) + '</span></td><td><span class="pill" style="' + scoreStyle(p.b) + '">' + fS1(p.b) + '</span></td></tr>';
+    });
+    $('#tabZ').innerHTML = h + '</tbody>';
+    drawZ1(c);
+  }
+  function drawZ1(c) {
+    const el = $('#cZ1'), W = el.clientWidth; if (!W) return;
+    c = c || calc4();
+    const H = 260, m = { l: 48, r: 18, t: 16, b: 36 };
+    const x = lgs(0.05, 20, m.l, W - m.r), y = lin(0, 100, H - m.b, m.t);
+    let s = svgOpen(W, H, 'Drug A dose-response with drug B held fixed: ZIP expectation versus fitted curve');
+    s += frame(W, H, m, x, y, [0, 25, 50, 75, 100], '% inhibition', 'dose of A, µM (log scale)');
+    s += axisLine(W, m, y(0));
+    const xs = logspace(0.05, 20, 180);
+    const Y2 = y(c.y2 * 100);
+    s += '<line class="base-line" x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + Y2.toFixed(1) + '" y2="' + Y2.toFixed(1) + '"/>';
+    s += '<text class="lbl-sm" x="' + (m.l + 4) + '" y="' + (c.y2 > 0.12 ? Y2 + 14 : Y2 - 6).toFixed(1) + '">B alone ' + f1(c.y2 * 100) + '%</text>';
+    s += '<path class="curve-faint" d="' + path(xs, x, v => y(hillP(ZA, v) * 100)) + '"/>';
+    s += '<path class="zip-exp" d="' + path(xs, x, v => y((c.y2 + (1 - c.y2) * hillP(ZA, v)) * 100)) + '"/>';
+    s += '<path class="zip-fit" d="' + path(xs, x, v => y(zipCurve(c.y2, c.fit.lm, c.fit.lam, v) * 100)) + '"/>';
+    c.pts.forEach(p => { s += bracket(x(p.x) + 9, y(p.z * 100), y(p.f * 100), p.d); });
+    c.pts.forEach(p => { s += '<circle class="dot-ink" cx="' + x(p.x).toFixed(1) + '" cy="' + y(p.o * 100).toFixed(1) + '" r="5"><title>A ' + p.x + ' µM: measured ' + f1(p.o * 100) + '%, ZIP expects ' + f1(p.z * 100) + '%, fitted ' + f1(p.f * 100) + '%, δ ' + fS1(p.d) + ' pp</title></circle>'; });
+    el.innerHTML = s + '</svg>';
+  }
+  function bind4() {
+    s4.s = +$('#z-s').value; s4.noise = +$('#z-n').value;
+    const chk = $('input[name="zdose"]:checked'); if (chk) s4.j = +chk.value;
+    $('#z-s').addEventListener('input', e => { s4.s = +e.target.value; render4(); });
+    $('#z-n').addEventListener('input', e => { s4.noise = +e.target.value; render4(); });
+    $$('input[name="zdose"]').forEach(r => r.addEventListener('change', () => { s4.j = +r.value; render4(); }));
+    $('#z-redraw').addEventListener('click', () => { s4.seed++; render4(); });
+  }
+
+  /* =================== 5 · All models =================== */
+  const s5 = { mode: 'indep', s: 0.6, noise: 0, seed: 5, A: { l: 0, h: 1, em: 100 }, B: { l: 0.5, h: 2, em: 100 } };
+  const drugB5 = () => s5.mode === 'sham' ? s5.A : s5.B;
+  function truth5(da, db) {
+    const A = s5.A;
+    if (s5.mode === 'sham') return hillP(A, da + db);
+    const eb = hillP(s5.B, db);
+    const Ause = s5.mode === 'shift' ? { l: A.l - s5.s * eb, h: A.h, em: A.em } : A;
+    return 1 - (1 - hillP(Ause, da)) * (1 - eb);
+  }
+  function compute5() {
+    const A = s5.A, B = drugB5(), all = [0].concat(DOSES);
+    const nz = normals(s5.seed, 36);
+    const obs = all.map((da, i) => all.map((db, j) => (i === 0 && j === 0) ? 0 : clamp(truth5(da, db) + nz[i * 6 + j] * s5.noise / 100, 0, 1)));
+    const fitA = DOSES.map((db, j) => { const y0 = hillP(B, db); return { y0, f: fitZip(DOSES, DOSES.map((da, i) => obs[i + 1][j + 1]), y0) }; });
+    const fitB = DOSES.map((da, i) => { const y0 = hillP(A, da); return { y0, f: fitZip(DOSES, DOSES.map((db, j) => obs[i + 1][j + 1]), y0) }; });
+    const res = DOSES.map((da, i) => DOSES.map((db, j) => {
+      const o = obs[i + 1][j + 1], ma = obs[i + 1][0], mb = obs[0][j + 1];
+      const hE = Math.max(ma, mb), bE = ma + mb - ma * mb;
+      const le = loeweExpected(da, db, A, B);
+      const ta = hillP(A, da), tb = hillP(B, db), zE = ta + tb - ta * tb;
+      const yA = zipCurve(fitA[j].y0, fitA[j].f.lm, fitA[j].f.lam, da), yB = zipCurve(fitB[i].y0, fitB[i].f.lm, fitB[i].f.lam, db);
+      const zF = (yA + yB) / 2;
+      return { da, db, o, hE, bE, le, zE, zF, w: ma > mb + 1e-9 ? 'A' : (mb > ma + 1e-9 ? 'B' : '='),
+        hS: (o - hE) * 100, bS: (o - bE) * 100, lS: le == null ? null : (o - le) * 100, zS: (zF - zE) * 100 };
+    }));
+    return { obs, res };
+  }
+  function render5() {
+    const sh = s5.mode === 'sham';
+    [['aa', s5.A], ['ab', s5.B]].forEach(([k, p]) => {
+      $('#' + k + '-ico').textContent = fIC(Math.pow(10, p.l)) + ' µM';
+      $('#' + k + '-ho').textContent = p.h.toFixed(1);
+      $('#' + k + '-emo').textContent = p.em + '%';
+    });
+    $('#a-so').textContent = fSh(s5.s);
+    $('#a-no').textContent = (s5.noise % 1 ? s5.noise.toFixed(1) : s5.noise) + ' pp';
+    $('#a-redraw').disabled = s5.noise === 0;
+    $('#f-s5').hidden = s5.mode !== 'shift';
+    $('#bfields').hidden = sh; $('#bnote').hidden = !sh; $('#keyB').hidden = sh;
+    $('#truthhint').textContent = s5.mode === 'sham'
+      ? 'Drug B is a copy of drug A. A well with A at x and B at y is just A at x + y, so nothing interacts anywhere.'
+      : s5.mode === 'shift'
+        ? 'B makes A more potent (positive strength) or less potent (negative): at B’s full effect, A’s IC50 is divided by 10^strength. On top of that, the drugs combine independently.'
+        : 'Each well holds what two independent drugs produce: E_A + E_B − E_A·E_B/100.';
+
+    const { obs, res } = compute5();
+    const all = [0].concat(DOSES);
+    let h = '<thead><tr><th scope="col"><span class="vh">A dose</span></th>' + all.map(d => '<th scope="col">' + d + '</th>').join('') + '</tr></thead><tbody>';
+    all.forEach((da, i) => {
+      h += '<tr><th scope="row">' + da + '</th>';
+      all.forEach((db, j) => {
+        if (i === 0 && j === 0) { h += '<td class="blank"></td>'; return; }
+        const o = obs[i][j] * 100, cls = i === 0 ? 'mono-b' : (j === 0 ? 'mono-a' : '');
+        h += '<td class="' + cls + '" style="' + obsStyle(o) + '" title="A ' + da + ' µM + B ' + db + ' µM: ' + f1(o) + '%">' + Math.round(o) + '</td>';
+      });
+      h += '</tr>';
+    });
+    $('#m-obs').innerHTML = h + '</tbody>';
+
+    const head = '<thead><tr><th scope="col"><span class="vh">A dose</span></th>' + DOSES.map(d => '<th scope="col">' + d + '</th>').join('') + '</tr></thead><tbody>';
+    let hh = head, hb = head, hl = head, hz = head;
+    let sH = 0, sB = 0, sL = 0, nL = 0, nNA = 0, sZ = 0;
+    res.forEach((row, i) => {
+      const rh = '<tr><th scope="row">' + DOSES[i] + '</th>';
+      hh += rh; hb += rh; hl += rh; hz += rh;
+      row.forEach(r => {
+        const tip = 'A ' + r.da + ' µM + B ' + r.db + ' µM · observed ' + f1(r.o * 100) + '%';
+        sH += r.hS; sB += r.bS; sZ += r.zS;
+        hh += '<td style="' + scoreStyle(r.hS) + '" title="' + tip + ' · HSA expects ' + f1(r.hE * 100) + '% (' + (r.w === '=' ? 'tie' : 'drug ' + r.w + ' alone') + ') · score ' + fS1(r.hS) + ' pp">' + fInt(r.hS) + '<span class="w">' + r.w + '</span></td>';
+        hb += '<td style="' + scoreStyle(r.bS) + '" title="' + tip + ' · Bliss expects ' + f1(r.bE * 100) + '% · score ' + fS1(r.bS) + ' pp">' + fInt(r.bS) + '</td>';
+        if (r.lS == null) { nNA++; hl += '<td class="na" title="' + tip + ' · Loewe undefined: one drug alone can’t reach the effect these doses would need">n/a</td>'; }
+        else { sL += r.lS; nL++; hl += '<td style="' + scoreStyle(r.lS) + '" title="' + tip + ' · Loewe expects ' + f1(r.le * 100) + '% · score ' + fS1(r.lS) + ' pp">' + fInt(r.lS) + '</td>'; }
+        hz += '<td style="' + scoreStyle(r.zS) + '" title="' + tip + ' · ZIP expects ' + f1(r.zE * 100) + '% (Bliss on curves) · fitted ' + f1(r.zF * 100) + '% · δ ' + fS1(r.zS) + ' pp">' + fInt(r.zS) + '</td>';
+      });
+      hh += '</tr>'; hb += '</tr>'; hl += '</tr>'; hz += '</tr>';
+    });
+    $('#m-hsa').innerHTML = hh + '</tbody>';
+    $('#m-bliss').innerHTML = hb + '</tbody>';
+    $('#m-loewe').innerHTML = hl + '</tbody>';
+    $('#m-zip').innerHTML = hz + '</tbody>';
+    const mH = sH / 25, mB = sB / 25, mZ = sZ / 25, mL = nL ? sL / nL : null;
+    $('#mean-h').textContent = 'mean ' + fS(mH) + ' pp';
+    $('#mean-b').textContent = 'mean ' + fS(mB) + ' pp';
+    $('#mean-z').textContent = 'mean ' + fS(mZ) + ' pp';
+    $('#mean-l').textContent = mL == null ? 'all n/a' : 'mean ' + fS(mL) + ' pp' + (nNA ? ' · ' + nNA + ' n/a' : '');
+    const stat = (name, v, sub) => '<div class="stat"><span>' + name + '</span><b>' + (v == null ? 'n/a' : fS(v)) + '</b><small>' + sub + '</small></div>';
+    $('#sum5').innerHTML = stat('HSA', mH, 'mean score, pp') + stat('Bliss', mB, 'mean score, pp') + stat('Loewe', mL, nNA ? 'mean of ' + nL + ' defined wells' : 'mean score, pp') + stat('ZIP', mZ, 'mean δ, pp');
+  }
+  function draw5() {
+    const el = $('#c5'), W = el.clientWidth; if (!W) return;
+    const sh = s5.mode === 'sham', A = s5.A, B = s5.B;
+    const H = 230, m = { l: 48, r: 34, t: 14, b: 36 };
+    const x = lgs(0.05, 20, m.l, W - m.r), y = lin(0, 100, H - m.b, m.t);
+    let s = svgOpen(W, H, 'Single-drug dose-response curves for drug A and drug B');
+    s += frame(W, H, m, x, y, [0, 25, 50, 75, 100], '% inhibition', 'dose, µM (log scale)');
+    DOSES.forEach(d => { const dx = x(d).toFixed(1); s += '<line class="dosev" x1="' + dx + '" x2="' + dx + '" y1="' + m.t + '" y2="' + (H - m.b) + '"/>'; });
+    s += axisLine(W, m, y(0));
+    const xs = logspace(0.05, 20, 180);
+    s += '<line class="plat-a" x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + y(A.em).toFixed(1) + '" y2="' + y(A.em).toFixed(1) + '"/>';
+    if (!sh) {
+      s += '<line class="plat-b" x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + y(B.em).toFixed(1) + '" y2="' + y(B.em).toFixed(1) + '"/>';
+      s += '<path class="curve-b" d="' + path(xs, x, v => y(hillP(B, v) * 100)) + '"/>';
+    }
+    s += '<path class="curve-a" d="' + path(xs, x, v => y(hillP(A, v) * 100)) + '"/>';
+    const labs = [{ t: sh ? 'A=B' : 'A', y: y(hillP(A, 20) * 100) + 4 }];
+    if (!sh) labs.push({ t: 'B', y: y(hillP(B, 20) * 100) + 4 });
+    spread(labs, 12, m.t + 8, H - m.b - 2).forEach(l => { s += '<text class="lbl" x="' + (W - m.r + 6) + '" y="' + l.y.toFixed(1) + '">' + l.t + '</text>'; });
+    el.innerHTML = s + '</svg>';
+  }
+  function bind5() {
+    const chk = $('input[name="truth5"]:checked'); if (chk) s5.mode = chk.value;
+    s5.s = +$('#a-s').value; s5.noise = +$('#a-n').value;
+    [['aa', 'A'], ['ab', 'B']].forEach(([k, K]) => {
+      s5[K].l = +$('#' + k + '-ic').value; s5[K].h = +$('#' + k + '-h').value; s5[K].em = +$('#' + k + '-em').value;
+      $('#' + k + '-ic').addEventListener('input', e => { s5[K].l = +e.target.value; upd5(); });
+      $('#' + k + '-h').addEventListener('input', e => { s5[K].h = +e.target.value; upd5(); });
+      $('#' + k + '-em').addEventListener('input', e => { s5[K].em = +e.target.value; upd5(); });
+    });
+    $$('input[name="truth5"]').forEach(r => r.addEventListener('change', () => { s5.mode = r.value; upd5(); }));
+    $('#a-s').addEventListener('input', e => { s5.s = +e.target.value; upd5(); });
+    $('#a-n').addEventListener('input', e => { s5.noise = +e.target.value; upd5(); });
+    $('#a-redraw').addEventListener('click', () => { s5.seed++; upd5(); });
+  }
+  function upd5() { render5(); draw5(); }
+
+  /* =================== tabs =================== */
+  const VIEWS = ['grid', 'sham', 'loewe', 'zip', 'all'];
+  function drawView(v) {
+    if (v === 'sham') { draw2a(); draw2b(); }
+    else if (v === 'loewe') { drawL1(); drawL2(); }
+    else if (v === 'zip') drawZ1();
+    else if (v === 'all') draw5();
+  }
+  function show(v) {
+    if (VIEWS.indexOf(v) < 0) v = 'grid';
+    VIEWS.forEach(n => {
+      const on = n === v;
+      $('#p-' + n).hidden = !on;
+      const t = $('#tab-' + n); t.setAttribute('aria-selected', String(on)); t.tabIndex = on ? 0 : -1;
+    });
+    requestAnimationFrame(() => drawView(v));
+  }
+  function go(v) { try { if (location.hash !== '#' + v) location.hash = v; } catch (e) {} show(v); }
+  $$('.tab').forEach(t => {
+    t.addEventListener('click', () => go(t.dataset.view));
+    t.addEventListener('keydown', e => {
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+      e.preventDefault();
+      const i = VIEWS.indexOf(t.dataset.view), n = VIEWS[(i + (e.key === 'ArrowRight' ? 1 : -1) + VIEWS.length) % VIEWS.length];
+      go(n); $('#tab-' + n).focus();
+    });
+  });
+  window.addEventListener('hashchange', () => show(location.hash.slice(1)));
+
+  /* =================== init =================== */
+  build1(); sync1(); render1();
+  bind2(); render2();
+  bind3(); render3();
+  bind4(); render4();
+  bind5(); render5();
+  const DRAW = { c2a: draw2a, c2b: draw2b, cL1: drawL1, cL2: drawL2, cZ1: () => drawZ1(), c5: draw5 };
+  if (typeof ResizeObserver !== 'undefined') {
+    const ro = new ResizeObserver(entries => entries.forEach(en => {
+      const el = en.target, w = el.clientWidth; if (!w || w === el._w) return; el._w = w;
+      DRAW[el.id] && DRAW[el.id]();
+    }));
+    Object.keys(DRAW).forEach(id => ro.observe($('#' + id)));
+  } else {
+    window.addEventListener('resize', () => Object.keys(DRAW).forEach(id => DRAW[id]()));
+  }
+  let h0 = ''; try { h0 = location.hash.slice(1); } catch (e) {}
+  show(h0);
+})();
+</script>
+
+</body>
+</html>
